@@ -1,0 +1,16 @@
+# MAU dataset yaml theo dinh dang Ultralytics segmentation.
+# Copy thanh data/dataset.yaml (bi gitignore) roi sua duong dan.
+#
+# QUAN TRONG - chia split theo VIDEO/SEQUENCE, khong chia ngau nhien theo
+# frame (CLAUDE.md muc 7). Cac frame lien ke trong cung video gan nhu giong
+# het nhau; chia ngau nhien theo frame se lam train/test bi data leakage.
+# Vi du dung: clip01..clip12 -> train, clip13..clip15 -> val,
+#             clip16..clip18 -> test. Mot video chi thuoc DUNG MOT split.
+
+path: data/labeled
+train: images/train
+val: images/val
+test: images/test
+
+names:
+  0: target

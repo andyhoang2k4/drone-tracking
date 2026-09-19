@@ -1,0 +1,51 @@
+# Config train chung cho YOLO11-seg va YOLO26-seg (xem CLAUDE.md muc 16 buoc 2)
+#
+# Nguyen tac: HAI model dung CHUNG khoi `common` de so sanh cong bang
+# (cung dataset/split/imgsz/epochs/augmentation). Chi khac `weights`.
+# Khong hardcode gia tri nay trong code - moi script doc tu day.
+
+# Dataset yaml theo dinh dang Ultralytics.
+# Split phai chia theo video/sequence, KHONG chia ngau nhien theo frame
+# (xem CLAUDE.md muc 7). Xem data/dataset.example.yaml lam mau.
+data: data/dataset.yaml
+
+common:
+  epochs: 100
+  imgsz: 640
+  batch: 8
+  workers: 4
+  device: 0            # index GPU tren cloud PC; "cpu" khi smoke test local
+  seed: 0              # ghi lai seed - bat buoc o vong benchmark cuoi (muc 14)
+  patience: 30
+  optimizer: auto
+  cos_lr: false
+  pretrained: true
+  val: true
+  plots: true
+
+  # Augmentation - giu giong nhau giua 2 model de so sanh cong bang
+  hsv_h: 0.015
+  hsv_s: 0.7
+  hsv_v: 0.4
+  degrees: 0.0
+  translate: 0.1
+  scale: 0.5
+  fliplr: 0.5
+  mosaic: 1.0
+
+models:
+  yolo11_seg:
+    weights: yolo11n-seg.pt
+    run_name: yolo11_seg
+
+  yolo26_seg:
+    # CHUA XAC MINH ten file weight cua YOLO26-seg tren version ultralytics
+    # se dung. Kiem tra danh sach model cua package truoc khi train;
+    # neu ten khong khop -> dung lai va bao, KHONG tu doi sang YOLO11
+    # (xem CLAUDE.md muc 9).
+    weights: yolo26n-seg.pt
+    run_name: yolo26_seg
+
+# Thu muc goc luu ket qua train. Moi lan chay tao 1 thu muc con theo
+# experiment id (xem CLAUDE.md muc 14).
+output_root: experiments

@@ -1,0 +1,24 @@
+# Chuan hoa LF cho file code/text (xem CLAUDE.md muc 3)
+* text=auto eol=lf
+
+*.py    text eol=lf
+*.sh    text eol=lf
+*.yaml  text eol=lf
+*.yml   text eol=lf
+*.json  text eol=lf
+*.md    text eol=lf
+*.txt   text eol=lf
+*.cfg   text eol=lf
+*.ipynb text eol=lf
+
+# Binary
+*.pt    binary
+*.pth   binary
+*.onnx  binary
+*.engine binary
+*.hef   binary
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.mp4   binary
+*.avi   binary

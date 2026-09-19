@@ -1,0 +1,60 @@
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+
+# ---- Virtual env ----
+.venv/
+venv/
+env/
+ENV/
+
+# ---- IDE / OS ----
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+
+# ---- Secrets / local env ----
+.env
+.env.*
+!.env.example
+
+# ---- Dataset thật (không commit) ----
+data/raw/**
+data/labeled/**
+data/occlusion_test_scenarios/**
+!data/**/.gitkeep
+!data/**/README.md
+
+# ---- Model weights / checkpoint ----
+*.pt
+*.pth
+*.onnx
+*.engine
+*.hef
+weights/
+
+# ---- Output của Ultralytics ----
+runs/
+
+# ---- Experiment artifacts ----
+# Giữ lại: config.yaml, metrics.json, README.md (xem CLAUDE.md muc 7)
+experiments/**/weights/
+experiments/**/videos/
+experiments/**/logs/
+
+# ---- Media sinh ra ----
+*.mp4
+*.avi
+*.mkv

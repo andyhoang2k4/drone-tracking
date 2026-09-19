@@ -1,0 +1,17 @@
+{
+  "experiment_id": "",
+  "status": "not_run",
+  "verification_level": "none",
+  "detection": {
+    "precision": null,
+    "recall": null,
+    "iou_threshold": 0.5
+  },
+  "tracking": {
+    "id_switches": null,
+    "frames": null,
+    "mean_fps": null,
+    "mean_latency_ms": null
+  },
+  "occlusion_scenarios": []
+}

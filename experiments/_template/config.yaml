@@ -1,0 +1,26 @@
+# Config cua experiment nay. Dien truoc khi chay, khong sua sau khi da co
+# ket qua (CLAUDE.md muc 13).
+
+experiment_id: ""
+date: ""
+purpose: ""          # cau hoi experiment nay tra loi
+
+detector:
+  model: ""          # yolo11_seg | yolo26_seg
+  weights: ""
+  imgsz: 640
+  conf: 0.25
+
+tracker:
+  type: botsort
+  config: configs/botsort.yaml
+  with_reid: false   # ghi ro true/false da dung
+
+motion_memory:
+  enabled: false
+  lost_timeout_frames: 15
+  reid_timeout_frames: 45
+
+dataset:
+  name: ""
+  split: ""          # ten split co dinh da dung

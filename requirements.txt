@@ -1,0 +1,24 @@
+# Drone AI Tracking - Python dependencies
+# Python 3.10+ (xem CLAUDE.md muc 8)
+#
+# CANH BAO VERSION (xem CLAUDE.md muc 4 - Dependency & Version Policy):
+# Cac pin duoi day CHUA duoc xac minh tren moi truong thuc te (local Windows
+# chua cai ultralytics/torch/opencv tai thoi diem scaffold).
+# Truoc khi dung tren cloud PC: chay `pip show ultralytics torch opencv-python`
+# va doi chieu. Neu lech -> BAO MISMATCH, khong tu sua file nay.
+#
+# Luu y torch + RTX 5060: ban torch cai qua PyPI mac dinh co the khong khop
+# CUDA runtime cua GPU nay. Cai torch/torchvision theo index chinh thuc cua
+# PyTorch cho dung CUDA build, roi cap nhat pin o day cho khop.
+
+ultralytics==8.3.0
+torch==2.5.1
+torchvision==0.20.1
+opencv-python==4.10.0.84
+
+numpy==1.26.4
+PyYAML==6.0.2
+tqdm==4.66.5
+
+# --- Dev / test (xem CLAUDE.md muc 11) ---
+pytest==8.3.3

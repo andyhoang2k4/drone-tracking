@@ -1,0 +1,33 @@
+# BoT-SORT tracker config cho project (xem CLAUDE.md muc 4)
+#
+# File nay la config RIENG cua project, truyen vao:
+#   model.track(..., tracker="configs/botsort.yaml")
+# Khong sua file botsort.yaml goc trong package ultralytics.
+#
+# CHUA XAC MINH: ten/y nghia cac key duoi day phan anh schema botsort.yaml cua
+# Ultralytics nhung chua doi chieu duoc voi version da cai (chua cai local).
+# Truoc khi chay that: so sanh voi
+#   python -c "import ultralytics,pathlib;print(pathlib.Path(ultralytics.__file__).parent/'cfg/trackers/botsort.yaml')"
+# Neu key lech -> bao lai, khong tu doan.
+
+tracker_type: botsort
+
+# --- Association thresholds ---
+track_high_thresh: 0.25    # nguong detection cho vong match dau
+track_low_thresh: 0.1      # nguong detection cho vong match thu hai
+new_track_thresh: 0.25     # nguong de khoi tao track moi
+track_buffer: 30           # so frame giu track da mat truoc khi xoa
+match_thresh: 0.8          # nguong IoU khi match
+fuse_score: true           # gop detection score vao cost matrix
+
+# --- Camera Motion Compensation (CMC) ---
+# Quan trong voi drone: camera di chuyen lien tuc.
+gmc_method: sparseOptFlow
+
+# --- Re-ID (xem CLAUDE.md muc 4) ---
+# MAC DINH TAT. Chi bat ro rang khi experiment can Re-ID,
+# va phai ghi lai trong experiments/<id>/config.yaml la da bat.
+proximity_thresh: 0.5
+appearance_thresh: 0.25
+with_reid: false
+model: auto
