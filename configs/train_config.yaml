@@ -39,10 +39,9 @@ models:
     run_name: yolo11_seg
 
   yolo26_seg:
-    # CHUA XAC MINH ten file weight cua YOLO26-seg tren version ultralytics
-    # se dung. Kiem tra danh sach model cua package truoc khi train;
-    # neu ten khong khop -> dung lai va bao, KHONG tu doi sang YOLO11
-    # (xem CLAUDE.md muc 9).
+    # Da xac minh tai duoc tren ultralytics 8.4.174 (8.3.0 KHONG co).
+    # Neu ten khong khop sau khi doi version -> dung lai va bao, KHONG tu doi
+    # sang YOLO11 (xem CLAUDE.md muc 9).
     weights: yolo26n-seg.pt
     run_name: yolo26_seg
 

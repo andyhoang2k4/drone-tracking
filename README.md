@@ -38,6 +38,7 @@ khong sua ma nguon noi bo cua `ultralytics`.
 | `src/utils/` | Logger JSONL, thu thap metadata tai hien experiment |
 | `scripts/train_yolo11.sh`, `train_yolo26.sh` | Train - **chi chay tren Ubuntu/cloud** |
 | `scripts/run_pipeline.py` | Pipeline day du, co co `--motion-memory` cho ablation |
+| `scripts/check_env.py` | Kiem tra Python, version package, CUDA, schema BoT-SORT, weight |
 | `data/` | Dataset (khong commit) - xem [data/README.md](data/README.md) |
 | `experiments/` | Ket qua tung lan chay - xem [experiments/README.md](experiments/README.md) |
 
@@ -46,7 +47,7 @@ khong sua ma nguon noi bo cua `ultralytics`.
 | Phan | Trang thai |
 |---|---|
 | Khung thu muc, config, logging, metadata experiment | Xong |
-| `detect.py`, `track.py` (wrapper Ultralytics) | Viet xong, **chua chay that** (local chua cai ultralytics) |
+| `detect.py`, `track.py`, `run_pipeline.py` | Smoke test CPU qua voi yolo11n-seg/yolo26n-seg pretrained (ultralytics 8.4.174), **chua chay tren GPU / dataset that** |
 | `motion_memory.py` state machine | Xong, co unit test |
 | `motion_memory.py` ngoai suy vi tri + prediction confidence | **Chua implement** (roadmap buoc 5) |
 | `evaluate.py` cac ham tinh metric | **Chua implement** - cho chot dinh dang ground truth (roadmap buoc 4) |
@@ -60,11 +61,15 @@ source .venv/bin/activate
 # Windows
 .venv\Scripts\activate
 
+# torch TRUOC, dung build cho may (xem dau requirements.txt)
+pip install torch==2.14.1 torchvision==0.29.1 --index-url https://download.pytorch.org/whl/cpu  # local CPU
 pip install -r requirements.txt
 ```
 
-Cac version trong `requirements.txt` **chua duoc xac minh** tren moi truong
-that. Kiem tra truoc khi train:
+Cai torch/torchvision tu index cua PyTorch TRUOC (xem chu thich dau
+`requirements.txt`: CPU cho local, CUDA cho cloud), roi moi cai requirements.
+Version da xac minh tren Windows CPU, **chua xac minh tren cloud GPU**.
+Kiem tra truoc khi train:
 
 ```bash
 pip show ultralytics torch opencv-python
@@ -72,6 +77,15 @@ pip show ultralytics torch opencv-python
 
 Neu lech so voi `requirements.txt`: bao mismatch, khong tu sua file
 (CLAUDE.md muc 4).
+
+Hoac dung script kiem tra tong hop:
+
+```bash
+# Local (CPU)
+python scripts/check_env.py --check-weights
+# Cloud PC (bat buoc co CUDA)
+python scripts/check_env.py --require-cuda --check-weights --output env_report.json
+```
 
 ## Quy trinh lam viec
 

@@ -1,19 +1,23 @@
 # Drone AI Tracking - Python dependencies
 # Python 3.10+ (xem CLAUDE.md muc 8)
 #
-# CANH BAO VERSION (xem CLAUDE.md muc 4 - Dependency & Version Policy):
-# Cac pin duoi day CHUA duoc xac minh tren moi truong thuc te (local Windows
-# chua cai ultralytics/torch/opencv tai thoi diem scaffold).
-# Truoc khi dung tren cloud PC: chay `pip show ultralytics torch opencv-python`
-# va doi chieu. Neu lech -> BAO MISMATCH, khong tu sua file nay.
+# Version policy: CLAUDE.md muc 4. Kiem tra moi truong: scripts/check_env.py
+# (bao lech so voi file nay, khong tu sua).
 #
-# Luu y torch + RTX 5060: ban torch cai qua PyPI mac dinh co the khong khop
-# CUDA runtime cua GPU nay. Cai torch/torchvision theo index chinh thuc cua
-# PyTorch cho dung CUDA build, roi cap nhat pin o day cho khop.
+# 2026-10-08: nang ultralytics 8.3.0 -> 8.4.174 (8.3.0 khong co YOLO26 va
+# BoT-SORT chua ho tro Re-ID), torch 2.5.1 -> 2.14.1 (2.5.1 khong ho tro RTX
+# 5060). Da xac minh tren Windows CPU (venv Python 3.11.9); CHUA xac minh tren
+# cloud GPU.
+#
+# torch/torchvision: cai TRUOC tu index chinh thuc cua PyTorch de dung build:
+#   Local CPU : pip install torch==2.14.1 torchvision==0.29.1 --index-url https://download.pytorch.org/whl/cpu
+#   Cloud GPU : chon index CUDA phu hop RTX 5060 tai https://pytorch.org/get-started/locally/
+# roi moi `pip install -r requirements.txt`. Version local "+cpu"/"+cuXXX" van
+# khop pin ben duoi.
 
-ultralytics==8.3.0
-torch==2.5.1
-torchvision==0.20.1
+ultralytics==8.4.174
+torch==2.14.1
+torchvision==0.29.1
 opencv-python==4.10.0.84
 
 numpy==1.26.4

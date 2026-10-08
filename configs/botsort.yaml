@@ -4,11 +4,12 @@
 #   model.track(..., tracker="configs/botsort.yaml")
 # Khong sua file botsort.yaml goc trong package ultralytics.
 #
-# CHUA XAC MINH: ten/y nghia cac key duoi day phan anh schema botsort.yaml cua
-# Ultralytics nhung chua doi chieu duoc voi version da cai (chua cai local).
-# Truoc khi chay that: so sanh voi
-#   python -c "import ultralytics,pathlib;print(pathlib.Path(ultralytics.__file__).parent/'cfg/trackers/botsort.yaml')"
-# Neu key lech -> bao lai, khong tu doan.
+# Schema da doi chieu voi ultralytics 8.4.174: cung bo key voi botsort.yaml goc.
+# Khi doi version ultralytics, chay lai `python scripts/check_env.py` de kiem
+# tra key; neu lech -> bao lai, khong tu doan.
+#
+# Khac gia tri mac dinh cua 8.4.174: appearance_thresh (0.25 o day, goc 0.8).
+# Chi co tac dung khi with_reid: true.
 
 tracker_type: botsort
 
