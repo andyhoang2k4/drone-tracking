@@ -25,3 +25,25 @@ tinh duoc "% frame du doan dung" va "sai so vi tri trong luc occlusion".
 Copy `dataset.example.yaml` thanh `dataset.yaml` (bi gitignore) va sua duong
 dan cho khop may dang chay. `configs/train_config.yaml` tro toi
 `data/dataset.yaml`.
+
+## Giai doan A: VisDrone2019-MOT (3 class)
+
+Class: `person` (pedestrian + people), `car` (car + van + truck),
+`motorcycle` (motor). Anh xa va split: `configs/dataset_visdrone.yaml`.
+Giai doan B (them tau thuyen) se la dataset version rieng.
+
+1. Tai VisDrone2019-MOT (train, val, test-dev) tu trang chinh thuc cua
+   VisDrone, giai nen vao `data/raw/VisDrone2019-MOT/` sao cho co
+   `VisDrone2019-MOT-train/sequences/` va `.../annotations/`.
+   Kiem tra license tren trang VisDrone truoc khi dung.
+2. Chuyen sang dinh dang Ultralytics (bbox):
+
+   ```bash
+   python scripts/prepare_visdrone.py --max-sequences 1   # smoke test
+   python scripts/prepare_visdrone.py --overwrite         # day du
+   ```
+
+   Sinh `data/labeled/visdrone_mot_a/` (kem `manifest.json` thong ke) va
+   `data/dataset.yaml`. Anh duoc hardlink, khong ton them dung luong.
+3. Sinh mask cho YOLO-seg bang SAM (`yolo_bbox2segment`) - buoc sau, chay
+   tren cloud.

@@ -1,0 +1,49 @@
+# Config chuan bi dataset giai doan A: VisDrone2019-MOT, 3 class.
+# Dung boi scripts/prepare_visdrone.py.
+#
+# File nay DINH NGHIA split (commit vao git): split theo SEQUENCE, dung
+# nguyen split chinh thuc cua VisDrone (train / val / test-dev), khong chia
+# ngau nhien theo frame (CLAUDE.md muc 7). Doi split/anh xa class sau khi da
+# xem ket qua -> tao dataset version moi + experiment moi (CLAUDE.md muc 13).
+#
+# Giai doan B (them tau thuyen) se la dataset version KHAC, khong sua file nay.
+
+name: visdrone_mot_a
+version: 1
+
+# Thu muc chua 3 thu muc giai nen cua VisDrone2019-MOT. Moi thu muc co
+# sequences/<seq>/<frame>.jpg va annotations/<seq>.txt.
+source_root: data/raw/VisDrone2019-MOT
+splits:
+  train: VisDrone2019-MOT-train
+  val: VisDrone2019-MOT-val
+  test: VisDrone2019-MOT-test-dev
+
+# Class cua project (id YOLO -> ten)
+classes:
+  0: person
+  1: car
+  2: motorcycle
+
+# object_category cua VisDrone -> class id project. Category khong co o day
+# (0 ignored region, 3 bicycle, 7 tricycle, 8 awning-tricycle, 9 bus,
+# 11 others) bi bo qua.
+category_map:
+  1: 0   # pedestrian -> person
+  2: 0   # people     -> person
+  4: 1   # car        -> car
+  5: 1   # van        -> car
+  6: 1   # truck      -> car
+  10: 2  # motor      -> motorcycle
+
+# Lay 1 frame moi N frame. Frame lien ke gan nhu giong het nhau nen train/val
+# khong can tat ca; test giu du frame de danh gia tracking/occlusion.
+frame_stride:
+  train: 5
+  val: 5
+  test: 1
+
+# Bo box nho hon nguong nay (pixel, sau khi cat theo bien anh).
+min_box_size: 2
+
+output_dir: data/labeled/visdrone_mot_a

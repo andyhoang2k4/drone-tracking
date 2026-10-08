@@ -38,6 +38,7 @@ khong sua ma nguon noi bo cua `ultralytics`.
 | `src/utils/` | Logger JSONL, thu thap metadata tai hien experiment |
 | `scripts/train_yolo11.sh`, `train_yolo26.sh` | Train - **chi chay tren Ubuntu/cloud** |
 | `scripts/run_pipeline.py` | Pipeline day du, co co `--motion-memory` cho ablation |
+| `scripts/prepare_visdrone.py` | Chuyen VisDrone2019-MOT sang dinh dang Ultralytics (giai doan A, 3 class) |
 | `scripts/check_env.py` | Kiem tra Python, version package, CUDA, schema BoT-SORT, weight |
 | `data/` | Dataset (khong commit) - xem [data/README.md](data/README.md) |
 | `experiments/` | Ket qua tung lan chay - xem [experiments/README.md](experiments/README.md) |
