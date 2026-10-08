@@ -19,6 +19,7 @@ env/
 ENV/
 
 # ---- IDE / OS ----
+.claude/settings.local.json
 .vscode/
 .idea/
 *.swp
