@@ -45,5 +45,14 @@ Giai doan B (them tau thuyen) se la dataset version rieng.
 
    Sinh `data/labeled/visdrone_mot_a/` (kem `manifest.json` thong ke) va
    `data/dataset.yaml`. Anh duoc hardlink, khong ton them dung luong.
-3. Sinh mask cho YOLO-seg bang SAM (`yolo_bbox2segment`) - buoc sau, chay
-   tren cloud.
+3. Sinh mask cho YOLO-seg bang SAM - chay tren cloud (CPU ~10 s/anh):
+
+   ```bash
+   python scripts/generate_masks.py --splits val --max-images 5 --device cpu  # smoke
+   python scripts/generate_masks.py --device 0                                  # day du
+   ```
+
+   Box goc duoc chuyen sang `labels_bbox/`, polygon ghi vao `labels/`. Mask
+   lech (IoU bbox-cua-mask vs box goc < `masks.fallback_iou`) thay bang hinh
+   chu nhat cua box goc, vi YOLO-seg tinh box train tu mask.
+   **Danh gia detection/occlusion luon dung box goc trong `labels_bbox/`.**

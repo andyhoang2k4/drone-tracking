@@ -47,3 +47,12 @@ frame_stride:
 min_box_size: 2
 
 output_dir: data/labeled/visdrone_mot_a
+
+# Sinh mask cho YOLO-seg tu box bang SAM (scripts/generate_masks.py).
+# Luu y: YOLO-seg tinh box train TU MASK, nen mask lech se lam box train lech.
+# Mask co IoU(bbox cua mask, box goc) < fallback_iou -> thay bang hinh chu
+# nhat dung bang box goc (giu box train dung, mask tho).
+# Box goc giu nguyen o labels_bbox/ - DANH GIA luon dung box goc nay.
+masks:
+  sam_model: sam_b.pt
+  fallback_iou: 0.5
