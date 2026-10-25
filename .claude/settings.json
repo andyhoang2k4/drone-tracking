@@ -21,7 +21,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python .claude/hooks/py_compile_check.py"
+            "command": "python \"$CLAUDE_PROJECT_DIR/.claude/hooks/py_compile_check.py\""
           }
         ]
       }
