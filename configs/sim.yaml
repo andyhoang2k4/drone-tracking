@@ -1,0 +1,19 @@
+# Cau hinh mo phong bay. Chi can ghi cac gia tri muon doi so voi default trong src/sim/config.py.
+loop_hz: 30.0
+
+link:
+  url: "udpin:0.0.0.0:14540"   # PX4 SITL: cong onboard/offboard. QGC dung 14550, chay song song duoc.
+
+camera:
+  gz_topic: "/camera"          # ten topic gz-transport cua camera trong world; kiem tra bang `gz topic -l`
+  hfov_deg: 100.0              # phai khop FOV trong file sdf cua model camera
+  width: 640
+  height: 480
+
+target:
+  lost_timeout_s: 1.5
+  reid_timeout_s: 8.0
+
+gimbal:
+  enabled: true
+  default_pitch_deg: -15.0

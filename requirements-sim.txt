@@ -1,0 +1,6 @@
+# Dependency rieng cho lop mo phong bay (src/sim). Chua dua vao requirements.txt vi file do khoa version.
+# Version ghim theo ban da cai va test (tests/sim) ngay 2026-10-28.
+pymavlink==2.4.50
+# opencv-python, numpy, pyyaml da co san trong moi truong (ultralytics keo theo).
+# Chay voi Gazebo can them ban python binding theo apt (khong qua pip):
+#   python3-gz-transport13 python3-gz-msgs10   (Gazebo Harmonic; doi so ban cho khop Gazebo cua ban)
