@@ -33,6 +33,8 @@ Dự án gồm 2 phần lớn, phát triển song song nhưng độc lập:
 
 Nếu một task có vẻ dẫn tới các việc ở nhóm "không cần" phía trên, dừng lại và hỏi lại người dùng trước khi làm.
 
+**Ngoại lệ (quyết định 2026-10-26): lớp mô phỏng bay.** Việc dựng mô phỏng PX4 SITL + Gazebo (tay điều khiển ảo, màn hình camera có OSD, chọn/khóa mục tiêu, bay bám và bay tìm khi mất mục tiêu) nằm RIÊNG trong `src/sim/` và được phép làm, không cần hỏi lại. Ràng buộc: lớp này chỉ nhận đầu ra của pipeline (track ID, bbox, state) qua interface, không sửa detect/track/motion memory; dùng lại `TrackState` của `motion_memory.py`; không dùng để đánh giá motion memory. Việc port PX4 cho board FK743M2-IIT6 vẫn nằm ngoài phạm vi repo này.
+
 ## 3. Môi trường phát triển
 
 | | Local Dev | Cloud PC |
@@ -64,6 +66,7 @@ Nếu một task có vẻ dẫn tới các việc ở nhóm "không cần" phía
 
 - Không giả định API mới nhất của `ultralytics`. Trước khi code phần liên quan model, kiểm tra version đã cài (`pip show ultralytics`) và xác nhận API tương ứng.
 - Khóa version `ultralytics`, `torch`, `opencv-python` trong `requirements.txt` — không tự ý upgrade major version trừ khi được yêu cầu.
+- Dependency chỉ dành cho lớp mô phỏng `src/sim/` (ví dụ `pymavlink`) nằm trong `requirements-sim.txt`, không đưa vào `requirements.txt`; ghim version sau khi cài.
 - Nếu version thực tế trong môi trường khác với version đã khóa trong `requirements.txt`, không tự sửa `requirements.txt` hay code để thích nghi — báo mismatch trước.
 - Nếu tên model hoặc API không khớp mô tả ở đây, dừng lại và báo cho người dùng thay vì tự suy đoán.
 
@@ -122,9 +125,11 @@ drone-tracking/
 ├── .gitignore
 ├── .gitattributes
 ├── requirements.txt
+├── requirements-sim.txt           (dependency riêng của src/sim)
 ├── configs/
 │   ├── botsort.yaml
-│   └── train_config.yaml
+│   ├── train_config.yaml
+│   └── sim.yaml                   (cấu hình mô phỏng bay)
 ├── data/                          (không commit dataset thật)
 │   ├── raw/
 │   ├── labeled/
@@ -142,11 +147,13 @@ drone-tracking/
 │   ├── track.py
 │   ├── motion_memory.py
 │   ├── evaluate.py
+│   ├── sim/                       (mô phỏng bay PX4 SITL + Gazebo, test ở tests/sim/ — xem mục 2)
 │   └── utils/
 ├── scripts/
 │   ├── train_yolo11.sh
 │   ├── train_yolo26.sh
-│   └── run_pipeline.py
+│   ├── run_pipeline.py
+│   └── run_sim.py                 (chạy mô phỏng bay)
 └── notebooks/
 ```
 
