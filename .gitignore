@@ -35,6 +35,8 @@ Thumbs.db
 data/raw/**
 data/labeled/**
 data/occlusion_test_scenarios/**
+# Sinh boi scripts/prepare_visdrone.py, duong dan theo tung may
+data/dataset.yaml
 !data/**/.gitkeep
 !data/**/README.md
 
