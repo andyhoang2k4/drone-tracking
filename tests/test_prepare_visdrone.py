@@ -108,9 +108,10 @@ def _write_fake_visdrone(root: Path) -> None:
         ann = root / folder / "annotations"
         ann.mkdir()
         ann.joinpath("uav0000001_00000_v.txt").write_text(
-            "1,1,10,10,20,20,1,1,0,0\n"   # person
-            "1,2,30,30,10,10,1,9,0,0\n"   # bus -> bo
-            "6,1,12,10,20,20,1,10,0,1\n",  # motorcycle
+            "1,1,10,10,20,20,1,1,0,0\n"   # pedestrian -> 0
+            "1,2,30,30,10,10,1,11,0,0\n"  # others -> bo
+            "1,3,40,30,10,10,1,9,0,0\n"   # bus -> 8
+            "6,1,12,10,20,20,1,10,0,1\n",  # motor -> 9
             encoding="utf-8",
         )
 
@@ -137,8 +138,9 @@ def test_main_end_to_end(tmp_path: Path):
     ]
     assert len(list((out / "images" / "test").glob("*.jpg"))) == 6
 
-    assert train_labels[0].read_text(encoding="utf-8").split()[0] == "0"
-    assert train_labels[1].read_text(encoding="utf-8").split()[0] == "2"
+    frame1 = train_labels[0].read_text(encoding="utf-8").splitlines()
+    assert [line.split()[0] for line in frame1] == ["0", "8"]
+    assert train_labels[1].read_text(encoding="utf-8").split()[0] == "9"
     # Frame khong co box -> file label rong
     assert (out / "labels" / "test" / "uav0000001_00000_v_0000002.txt").read_text() == ""
 

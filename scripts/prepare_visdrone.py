@@ -1,6 +1,6 @@
 """Chuyen VisDrone2019-MOT sang dinh dang Ultralytics (detection labels).
 
-Giai doan A cua dataset (xem configs/dataset_visdrone.yaml): 3 class, split
+Giai doan A cua dataset (xem configs/dataset_visdrone.yaml): 10 class, split
 theo sequence dung split chinh thuc cua VisDrone (CLAUDE.md muc 7).
 
 Script nay chi tao nhan BOUNDING BOX. Mask cho YOLO-seg duoc sinh o buoc sau

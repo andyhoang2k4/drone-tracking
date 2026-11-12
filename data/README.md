@@ -26,10 +26,12 @@ Copy `dataset.example.yaml` thanh `dataset.yaml` (bi gitignore) va sua duong
 dan cho khop may dang chay. `configs/train_config.yaml` tro toi
 `data/dataset.yaml`.
 
-## Giai doan A: VisDrone2019-MOT (3 class)
+## Giai doan A: VisDrone2019-MOT (10 class, dataset version 2)
 
-Class: `person` (pedestrian + people), `car` (car + van + truck),
-`motorcycle` (motor). Anh xa va split: `configs/dataset_visdrone.yaml`.
+Class: giu nguyen 10 class cua VisDrone (pedestrian, people, bicycle, car,
+van, truck, tricycle, awning-tricycle, bus, motor); bo category 0 (ignored
+region) va 11 (others). Vung ignored chua duoc xu ly o version nay.
+Anh xa va split: `configs/dataset_visdrone.yaml`.
 Giai doan B (them tau thuyen) se la dataset version rieng.
 
 1. Tai VisDrone2019-MOT (train, val, test-dev) tu trang chinh thuc cua
@@ -43,7 +45,7 @@ Giai doan B (them tau thuyen) se la dataset version rieng.
    python scripts/prepare_visdrone.py --overwrite         # day du
    ```
 
-   Sinh `data/labeled/visdrone_mot_a/` (kem `manifest.json` thong ke) va
+   Sinh `data/labeled/visdrone_mot_a_v2/` (kem `manifest.json` thong ke) va
    `data/dataset.yaml`. Anh duoc hardlink, khong ton them dung luong.
 3. Sinh mask cho YOLO-seg bang SAM - chay tren cloud (CPU ~10 s/anh):
 
