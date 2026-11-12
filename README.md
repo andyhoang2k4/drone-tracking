@@ -112,6 +112,10 @@ python scripts/run_pipeline.py --weights <best.pt> \
     --source data/occlusion_test_scenarios/scn01.mp4 \
     --experiment-id <exp_id> --target-track-id 1
 
+# imgsz: --imgsz > detector.imgsz trong experiments/<id>/config.yaml >
+# run_context.json canh weights > configs/train_config.yaml. Gia tri da dung
+# ghi vao <output>.meta.json (detect/track) va run_context.json (pipeline).
+
 # Train (chi tren Ubuntu/cloud)
 bash scripts/train_yolo11.sh yolo11_baseline_001
 ```

@@ -8,7 +8,10 @@ purpose: ""          # cau hoi experiment nay tra loi
 detector:
   model: ""          # yolo11_seg | yolo26_seg
   weights: ""
-  imgsz: 640
+  # null = lay theo run_context.json cua lan train sinh ra weights, roi
+  # configs/train_config.yaml. Dien so neu muon co dinh; --imgsz tren CLI
+  # van uu tien cao nhat (src/utils/inference_settings.py).
+  imgsz: null
   conf: 0.25
 
 tracker:
