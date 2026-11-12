@@ -154,6 +154,19 @@ def dataset_info(dataset_yaml: Path) -> dict[str, Any]:
     return info
 
 
+def partial_dataset_error(info: Mapping[str, Any], allow_partial: bool) -> Optional[str]:
+    """Thong bao loi neu dataset la ban chay thu ma khong cho phep; None neu duoc chay."""
+    if not info.get("partial") or allow_partial:
+        return None
+    reasons = ", ".join(info.get("partial_reasons") or []) or "khong ro"
+    return (
+        f"Dataset {info.get('name')} v{info.get('version')} la ban CHAY THU ({reasons}); "
+        f"manifest: {info.get('manifest')}. Chay lai prepare_visdrone.py --overwrite "
+        "(va generate_masks.py) khong co gioi han truoc khi train, hoac truyen "
+        "--allow-partial neu co y train tren ban nay."
+    )
+
+
 def build_run_context(
     *,
     experiment_id: str,

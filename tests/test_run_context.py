@@ -101,3 +101,57 @@ def test_build_run_context_keeps_dataset_mapping(tmp_path: Path):
         repo_root=tmp_path,
     )
     assert ctx["dataset"] == {"name": "visdrone_mot_a", "version": 2}
+
+
+# ---------------- chan train tren dataset chay thu ----------------
+
+import re  # noqa: E402
+import subprocess  # noqa: E402
+
+import pytest  # noqa: E402
+
+from src.utils.run_context import partial_dataset_error  # noqa: E402
+
+
+def test_partial_dataset_error():
+    partial = {"name": "d", "version": 2, "partial": True,
+               "partial_reasons": ["prepare_visdrone.py --max-sequences 1"], "manifest": "m"}
+    msg = partial_dataset_error(partial, allow_partial=False)
+    assert msg is not None and "--max-sequences 1" in msg and "--allow-partial" in msg
+    assert partial_dataset_error(partial, allow_partial=True) is None
+    assert partial_dataset_error({"partial": False}, allow_partial=False) is None
+    # Khong xac dinh (khong co manifest) -> khong chan, script chi canh bao.
+    assert partial_dataset_error({"partial": None}, allow_partial=False) is None
+
+
+def _train_heredoc(script: Path) -> str:
+    match = re.search(r"<<'PY'\n(.*?)\nPY\n", script.read_text(encoding="utf-8"), re.S)
+    assert match, f"Khong tim thay doan Python trong {script}"
+    return match.group(1)
+
+
+@pytest.mark.parametrize("model", ["yolo11", "yolo26"])
+def test_train_script_stops_on_partial_dataset(tmp_path: Path, model: str):
+    """Chay doan Python cua train_*.sh voi dataset chay thu: phai dung truoc
+    khi tao thu muc experiment va truoc khi import ultralytics (khong train)."""
+    yaml_path = _write_dataset(
+        tmp_path, "labeled/visdrone_mot_a_v2",
+        {"dataset": {"name": "visdrone_mot_a", "version": 2}, "max_sequences": 1},
+    )
+    config = tmp_path / "train_config.yaml"
+    config.write_text(
+        f"data: {yaml_path}\n"
+        f"common: {{epochs: 1}}\n"
+        f"weights_dir: {tmp_path / 'weights'}\n"
+        f"models: {{m: {{weights: x.pt}}}}\n"
+        f"output_root: {tmp_path / 'experiments'}\n",
+        encoding="utf-8",
+    )
+    code = _train_heredoc(REPO_ROOT / "scripts" / f"train_{model}.sh")
+    result = subprocess.run(
+        [sys.executable, "-c", code, str(config), "m", "exp_001"],
+        cwd=REPO_ROOT, capture_output=True, text=True, timeout=60,
+    )
+    assert result.returncode != 0
+    assert "DUNG" in result.stderr and "--max-sequences 1" in result.stderr
+    assert not (tmp_path / "experiments" / "exp_001").exists()

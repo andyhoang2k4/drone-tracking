@@ -47,6 +47,9 @@ Giai doan B (them tau thuyen) se la dataset version rieng.
 
    Sinh `data/labeled/visdrone_mot_a_v2/` (kem `manifest.json` thong ke) va
    `data/dataset.yaml`. Anh duoc hardlink, khong ton them dung luong.
+   Ban smoke test (`--max-sequences`, hay `generate_masks.py --max-images`)
+   duoc danh dau `partial` trong manifest; `scripts/train_*.sh` tu dung neu
+   gap dataset partial, tru khi truyen `--allow-partial`.
 3. Sinh mask cho YOLO-seg bang SAM - chay tren cloud (CPU ~10 s/anh):
 
    ```bash
