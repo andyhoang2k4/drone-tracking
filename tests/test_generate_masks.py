@@ -98,7 +98,7 @@ def test_process_split_moves_box_labels_and_is_rerunnable(tmp_path: Path):
     (tmp_path / "labels" / "val" / "b.txt").write_text("", encoding="utf-8")
     (tmp_path / "labels" / "val.cache").write_text("stale", encoding="utf-8")
 
-    def fake_sam(image, xyxy_px):
+    def fake_sam(image, xyxy_px, stats):
         assert image.shape[:2] == (20, 40)
         return [None] * len(xyxy_px)
 

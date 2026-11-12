@@ -72,3 +72,10 @@ output_dir: data/labeled/visdrone_mot_a_v2
 masks:
   sam_model: sam_b.pt
   fallback_iou: 0.5
+  # Nguong diem mask cua Ultralytics: mask diem <= sam_conf bi bo. Mac dinh
+  # Ultralytics la 0.25 -> SAM tra ve it mask hon box. 0.0 = giu moi mask;
+  # mask kem van bi thay bang hinh chu nhat theo fallback_iou.
+  sam_conf: 0.0
+  # So box moi lan goi decoder SAM (anh chi ma hoa 1 lan). Gioi han bo nho:
+  # mask full-res float ~ 8 MB/box voi anh 1904x1071. OOM -> tu chia doi.
+  sam_box_batch: 32

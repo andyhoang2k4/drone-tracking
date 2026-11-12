@@ -173,7 +173,7 @@ def test_dataset_info_on_real_manifests(tmp_path: Path, monkeypatch):
                          "--dataset-yaml", str(yaml_path), "--link-mode", "copy"]) == 0
     assert dataset_info(yaml_path)["partial"] is False
 
-    monkeypatch.setattr(gm, "load_sam", lambda *a, **k: (lambda img, xyxy: [None] * len(xyxy)))
+    monkeypatch.setattr(gm, "load_sam", lambda *a, **k: (lambda img, xyxy, stats: [None] * len(xyxy)))
     assert gm.main(["--dataset-dir", str(out), "--splits", "train", "val",
                     "--max-images", "1"]) == 0
     info = dataset_info(yaml_path)

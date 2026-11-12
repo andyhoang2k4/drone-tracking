@@ -237,23 +237,62 @@ def segment_in_batches(
 # ---------------- SAM ----------------
 
 
-def load_sam(model_name: str, weights_dir: Path, device: Optional[str]) -> SegmentFn:
-    """Nap SAM; tai weight vao weights_dir (gitignore) neu chua co."""
+# imgsz ma SAM.predict cua Ultralytics dat san; Predictor dung truc tiep mac dinh
+# 640 nen phai truyen ro de giu nguyen cach goi cu.
+SAM_IMGSZ = 1024
+
+
+def load_sam(
+    model_name: str,
+    weights_dir: Path,
+    device: Optional[str],
+    conf: float,
+    box_batch: int,
+) -> Callable[[np.ndarray, np.ndarray, Counter], list[Optional[np.ndarray]]]:
+    """Nap SAM; tai weight vao weights_dir (gitignore) neu chua co.
+
+    Tra ve segment(image, xyxy_px, stats): ma hoa anh MOT lan (Predictor.set_image),
+    roi chi chay decoder cho tung nhom <= box_batch box (segment_in_batches).
+    `conf`: nguong diem mask cua Ultralytics; mask diem <= conf bi bo (mac dinh
+    cua Ultralytics la 0.25 - nguyen nhan "SAM tra ve 9 mask cho 10 box").
+    """
     from ultralytics import SAM
+    from ultralytics.models.sam import Predictor
 
     weights_dir.mkdir(parents=True, exist_ok=True)
     previous_cwd = Path.cwd()
     os.chdir(weights_dir)
     try:
-        model = SAM(model_name)
+        sam_model = SAM(model_name)
     finally:
         os.chdir(previous_cwd)
 
-    def segment(image: np.ndarray, xyxy_px: np.ndarray) -> list[np.ndarray]:
-        result = model(image, bboxes=xyxy_px, verbose=False, save=False, device=device)[0]
-        if result.masks is None:
-            return [None] * len(xyxy_px)
-        return list(result.masks.xyn)
+    overrides = dict(conf=conf, imgsz=SAM_IMGSZ, task="segment", mode="predict", save=False, verbose=False)
+    if device is not None:
+        overrides["device"] = device
+    predictor = Predictor(overrides=overrides)
+    predictor.setup_model(model=sam_model.model, verbose=False)
+
+    def free_cuda_cache() -> None:
+        import torch
+
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+
+    def call(xyxy_chunk: np.ndarray) -> tuple[list, list[int]]:
+        # source=None -> dung anh + features da set_image, chi chay decoder.
+        result = predictor(bboxes=xyxy_chunk)[0]
+        if result.masks is None or result.boxes is None:
+            return [], []
+        # boxes.cls = chi so box goc trong nhom (postprocess cua SAM Predictor).
+        return list(result.masks.xyn), [int(c) for c in result.boxes.cls.tolist()]
+
+    def segment(image: np.ndarray, xyxy_px: np.ndarray, stats: Counter) -> list[Optional[np.ndarray]]:
+        predictor.set_image(image)
+        try:
+            return segment_in_batches(xyxy_px, call, box_batch, stats, on_oom=free_cuda_cache)
+        finally:
+            predictor.reset_image()
 
     return segment
 
@@ -276,7 +315,7 @@ def _ensure_box_labels(dataset_dir: Path, split: str) -> Path:
 def process_split(
     dataset_dir: Path,
     split: str,
-    sam: Callable[[np.ndarray, np.ndarray], list],
+    sam: Callable[[np.ndarray, np.ndarray, Counter], list],
     fallback_iou: float,
     max_images: Optional[int],
 ) -> dict:
@@ -298,6 +337,7 @@ def process_split(
         images = images[:max_images]
 
     stats: Counter = Counter()
+    recovery: Counter = Counter({key: 0 for key in RECOVERY_KEYS})
     ious: list[float] = []
     for img_path in tqdm(images, desc=f"SAM {split}"):
         box_lines = (box_dir / f"{img_path.stem}.txt").read_text(encoding="utf-8").splitlines()
@@ -309,7 +349,7 @@ def process_split(
             h, w = image.shape[:2]
             lines = convert_label_lines(
                 box_lines,
-                lambda xyxy: sam(image, xyxy),
+                lambda xyxy: sam(image, xyxy, recovery),
                 w,
                 h,
                 fallback_iou,
@@ -347,6 +387,10 @@ def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
     parser.add_argument("--splits", nargs="+", default=["train", "val", "test"])
     parser.add_argument("--sam-model", default=None, help="Ghi de masks.sam_model")
     parser.add_argument("--fallback-iou", type=float, default=None)
+    parser.add_argument("--sam-conf", type=float, default=None, help="Ghi de masks.sam_conf")
+    parser.add_argument(
+        "--sam-box-batch", type=int, default=None, help="Ghi de masks.sam_box_batch (so box moi lan goi SAM)"
+    )
     parser.add_argument("--device", default=None, help='vd "0" hoac "cpu"')
     parser.add_argument("--weights-dir", type=Path, default=REPO_ROOT / "weights")
     parser.add_argument(
@@ -371,7 +415,14 @@ def main(argv: Optional[list[str]] = None) -> int:
         if not (dataset_dir / "images" / split).is_dir():
             raise FileNotFoundError(f"Khong thay {dataset_dir / 'images' / split}")
 
-    sam = load_sam(sam_model, args.weights_dir, args.device)
+    sam_conf = args.sam_conf if args.sam_conf is not None else float(mask_cfg.get("sam_conf", 0.0))
+    sam_box_batch = (
+        args.sam_box_batch if args.sam_box_batch is not None else int(mask_cfg.get("sam_box_batch", 32))
+    )
+    if sam_box_batch < 1:
+        raise ValueError(f"sam_box_batch phai >= 1, nhan {sam_box_batch}")
+
+    sam = load_sam(sam_model, args.weights_dir, args.device, sam_conf, sam_box_batch)
 
     report = {"sam_model": sam_model, "fallback_iou": fallback_iou, "splits": {}}
     for split in args.splits:
