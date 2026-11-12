@@ -17,7 +17,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Optional, Union
+from typing import Any, Mapping, Optional, Union
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_TRAIN_CONFIG = REPO_ROOT / "configs" / "train_config.yaml"
@@ -135,3 +135,17 @@ def resolve_imgsz(
             f"imgsz={imgsz} ({source}) khac imgsz luc train={trained[0]} ({trained[1]})"
         )
     return ImgszChoice(imgsz=imgsz, source=source, warnings=warnings)
+
+
+def write_inference_meta(output: PathLike, params: Mapping[str, Any], choice: ImgszChoice) -> Path:
+    """Ghi tham so inference da dung (gom imgsz + nguon) canh log: <output>.meta.json.
+
+    Dung de so sanh cong bang giua cac lan chay (vd co/khong Motion Memory).
+    """
+    from src.utils.logging_utils import write_json
+
+    meta_path = Path(output).with_suffix(".meta.json")
+    meta = {k: (str(v) if isinstance(v, Path) else v) for k, v in params.items()}
+    meta.update(choice.as_dict())
+    write_json(meta_path, meta)
+    return meta_path

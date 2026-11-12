@@ -18,6 +18,11 @@ from pathlib import Path
 from typing import Any, Iterator, Optional
 
 from src.motion_memory import BBox, Observation
+from src.utils.inference_settings import (
+    DEFAULT_TRAIN_CONFIG,
+    resolve_imgsz,
+    write_inference_meta,
+)
 from src.utils.logging_utils import JsonlLogger
 
 DEFAULT_TRACKER_CONFIG = Path("configs/botsort.yaml")
@@ -29,7 +34,7 @@ def iter_tracks(
     *,
     tracker: Path = DEFAULT_TRACKER_CONFIG,
     conf: float = 0.25,
-    imgsz: int = 640,
+    imgsz: int,
     device: Optional[str] = None,
     classes: Optional[list[int]] = None,
     persist: bool = True,
@@ -108,7 +113,20 @@ def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
     parser.add_argument("--output", type=Path, required=True, help="File .jsonl")
     parser.add_argument("--tracker", type=Path, default=DEFAULT_TRACKER_CONFIG)
     parser.add_argument("--conf", type=float, default=0.25)
-    parser.add_argument("--imgsz", type=int, default=640)
+    parser.add_argument(
+        "--imgsz",
+        type=int,
+        default=None,
+        help="Bo trong = lay theo experiment (config.yaml / run_context.json canh "
+        "weights), roi configs/train_config.yaml",
+    )
+    parser.add_argument(
+        "--experiment-dir",
+        type=Path,
+        default=None,
+        help="Thu muc experiment co config.yaml (detector.imgsz) - bac uu tien 2",
+    )
+    parser.add_argument("--train-config", type=Path, default=DEFAULT_TRAIN_CONFIG)
     parser.add_argument("--device", default=None, help='vd "0" hoac "cpu"')
     parser.add_argument("--classes", type=int, nargs="*", default=None)
     parser.add_argument("--echo", action="store_true", help="In ra console")
@@ -120,18 +138,30 @@ def main(argv: Optional[list[str]] = None) -> int:
     if not args.tracker.exists():
         raise FileNotFoundError(f"Khong tim thay tracker config: {args.tracker}")
 
+    choice = resolve_imgsz(
+        args.imgsz,
+        experiment_dir=args.experiment_dir,
+        weights=args.weights,
+        train_config=args.train_config,
+    )
+    print(f"imgsz = {choice.imgsz} (nguon: {choice.source})")
+    for warning in choice.warnings:
+        print(f"CANH BAO: {warning}")
+    meta_path = write_inference_meta(args.output, vars(args), choice)
+
     with JsonlLogger(args.output, echo=args.echo) as log:
         for record in iter_tracks(
             args.weights,
             args.source,
             tracker=args.tracker,
             conf=args.conf,
-            imgsz=args.imgsz,
+            imgsz=choice.imgsz,
             device=args.device,
             classes=args.classes,
         ):
             log.write(record)
     print(f"Da ghi track log: {args.output}")
+    print(f"Tham so inference: {meta_path}")
     return 0
 
 
