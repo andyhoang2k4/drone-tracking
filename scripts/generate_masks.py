@@ -51,6 +51,21 @@ IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png"}
 # segment_fn(xyxy_px (N, 4)) -> N polygon, moi polygon (K, 2) toa do chuan hoa
 SegmentFn = Callable[[np.ndarray], Sequence[np.ndarray]]
 
+# Mot lan goi SAM cho mot nhom box: call_fn(xyxy_px (K, 4)) -> (polygons, prompt_idx)
+# voi polygons[j] la mask cua box thu prompt_idx[j] TRONG NHOM (SAM co the bo bot
+# mask hoac tra khong theo thu tu, nen phai ghep theo chi so, khong theo vi tri).
+SamCallFn = Callable[[np.ndarray], tuple[Sequence[Optional[np.ndarray]], Sequence[int]]]
+
+# So dem phuc hoi khi goi SAM (ghi vao manifest.json theo tung split).
+RECOVERY_KEYS = (
+    "sam_calls",             # so lan goi SAM thanh cong (khong OOM)
+    "count_mismatch_calls",  # lan goi tra so mask hop le != so box
+    "retried_single_boxes",  # box thieu mask -> goi lai rieng tung box
+    "rect_missing_mask",     # box van khong co mask -> hinh chu nhat
+    "oom_retries",           # OOM o nhom > 1 box -> chia doi va thu lai
+    "rect_oom",              # OOM ca khi goi 1 box -> hinh chu nhat
+)
+
 
 # ---------------- ham thuan (co unit test) ----------------
 
@@ -149,6 +164,74 @@ def summarize_ious(ious: Sequence[float], fallback_iou: float) -> dict:
         "below_fallback": int((arr < fallback_iou).sum()),
         "below_fallback_ratio": round(float((arr < fallback_iou).mean()), 4),
     }
+
+
+def is_oom_error(exc: BaseException) -> bool:
+    """CUDA OOM (torch.cuda.OutOfMemoryError hoac RuntimeError 'out of memory')."""
+    return type(exc).__name__ == "OutOfMemoryError" or "out of memory" in str(exc).lower()
+
+
+def segment_in_batches(
+    xyxy_px: np.ndarray,
+    call_fn: SamCallFn,
+    batch_size: int,
+    stats: Counter,
+    on_oom: Optional[Callable[[], None]] = None,
+) -> list[Optional[np.ndarray]]:
+    """Goi SAM theo nhom <= batch_size box, ghep mask theo chi so box.
+
+    - Nhom tra thieu mask -> goi lai rieng tung box thieu.
+    - OOM o nhom > 1 box -> `on_oom()` (vd giai phong cache) roi chia doi nhom.
+    - Van khong co mask (hoac OOM ca khi 1 box) -> None; nguoi goi dung hinh chu
+      nhat cua box goc. Moi truong hop deu duoc dem vao `stats` (RECOVERY_KEYS),
+      khong raise va khong bo qua im lang.
+    """
+    if batch_size < 1:
+        raise ValueError(f"batch_size phai >= 1, nhan {batch_size}")
+    n = len(xyxy_px)
+    result: list[Optional[np.ndarray]] = [None] * n
+    oom_failed: set[int] = set()
+
+    def run(indices: list[int]) -> None:
+        try:
+            polygons, prompt_idx = call_fn(xyxy_px[indices])
+        except Exception as exc:  # noqa: BLE001 - chi nuot OOM, loi khac raise lai
+            if not is_oom_error(exc):
+                raise
+            if on_oom is not None:
+                on_oom()
+            if len(indices) == 1:
+                stats["rect_oom"] += 1
+                oom_failed.add(indices[0])
+                return
+            stats["oom_retries"] += 1
+            half = len(indices) // 2
+            run(indices[:half])
+            run(indices[half:])
+            return
+
+        stats["sam_calls"] += 1
+        assigned = 0
+        for polygon, local in zip(polygons, prompt_idx):
+            local = int(local)
+            if 0 <= local < len(indices) and result[indices[local]] is None:
+                result[indices[local]] = polygon
+                assigned += 1
+        if assigned != len(indices) or len(polygons) != len(indices):
+            stats["count_mismatch_calls"] += 1
+        if len(indices) > 1:
+            for i in indices:
+                if result[i] is None:
+                    stats["retried_single_boxes"] += 1
+                    run([i])
+
+    for start in range(0, n, batch_size):
+        run(list(range(start, min(start + batch_size, n))))
+
+    stats["rect_missing_mask"] += sum(
+        1 for i, poly in enumerate(result) if poly is None and i not in oom_failed
+    )
+    return result
 
 
 # ---------------- SAM ----------------

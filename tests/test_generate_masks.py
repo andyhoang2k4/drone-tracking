@@ -112,3 +112,130 @@ def test_process_split_moves_box_labels_and_is_rerunnable(tmp_path: Path):
     assert seg[0] == "1" and len(seg) == 1 + 8  # hinh chu nhat 4 dinh
     assert (tmp_path / "labels" / "val" / "b.txt").read_text() == ""
     assert not (tmp_path / "labels" / "val.cache").exists()
+
+
+# ---------------- segment_in_batches (SAM gia) ----------------
+
+from scripts.generate_masks import RECOVERY_KEYS, is_oom_error, segment_in_batches  # noqa: E402
+
+
+class FakeOOM(RuntimeError):
+    pass
+
+
+FakeOOM.__name__ = "OutOfMemoryError"
+
+
+def _boxes(n: int) -> np.ndarray:
+    """Box i co x1 = i -> polygon gia mang chi so box de kiem tra ghep dung."""
+    return np.array([[i, 0, i + 1, 1] for i in range(n)], dtype=float)
+
+
+def _poly(box: np.ndarray) -> np.ndarray:
+    return np.full((4, 2), box[0])
+
+
+def _box_id(poly) -> int:
+    return int(poly[0, 0])
+
+
+def _stats(**expected) -> dict:
+    return {k: expected.get(k, 0) for k in RECOVERY_KEYS}
+
+
+def test_batches_respect_batch_size_and_order():
+    calls = []
+
+    def call(chunk):
+        calls.append(len(chunk))
+        return [_poly(b) for b in chunk], list(range(len(chunk)))
+
+    stats: Counter = Counter()
+    out = segment_in_batches(_boxes(10), call, 4, stats)
+    assert calls == [4, 4, 2]
+    assert [_box_id(p) for p in out] == list(range(10))
+    assert {k: stats[k] for k in RECOVERY_KEYS} == _stats(sam_calls=3)
+
+
+def test_missing_mask_is_retried_per_box_then_rectangle():
+    """SAM bo mask cua box 3 (score thap) ca khi goi rieng -> None (hinh chu nhat)."""
+    def call(chunk):
+        keep = [j for j, b in enumerate(chunk) if int(b[0]) != 3]
+        return [_poly(chunk[j]) for j in keep], keep
+
+    stats: Counter = Counter()
+    out = segment_in_batches(_boxes(5), call, 5, stats)
+    assert [None if p is None else _box_id(p) for p in out] == [0, 1, 2, None, 4]
+    assert {k: stats[k] for k in RECOVERY_KEYS} == _stats(
+        sam_calls=2, count_mismatch_calls=2, retried_single_boxes=1, rect_missing_mask=1
+    )
+
+
+def test_missing_mask_recovered_on_single_retry():
+    """Thieu mask khi goi ca nhom, goi rieng thi co."""
+    def call(chunk):
+        if len(chunk) > 1:
+            return [_poly(b) for b in chunk[1:]], list(range(1, len(chunk)))
+        return [_poly(chunk[0])], [0]
+
+    stats: Counter = Counter()
+    out = segment_in_batches(_boxes(3), call, 3, stats)
+    assert [_box_id(p) for p in out] == [0, 1, 2]
+    assert stats["retried_single_boxes"] == 1 and stats["rect_missing_mask"] == 0
+
+
+def test_out_of_order_masks_are_matched_by_index():
+    def call(chunk):
+        order = list(reversed(range(len(chunk))))
+        return [_poly(chunk[j]) for j in order], order
+
+    stats: Counter = Counter()
+    out = segment_in_batches(_boxes(6), call, 6, stats)
+    assert [_box_id(p) for p in out] == list(range(6))
+    assert stats["count_mismatch_calls"] == 0
+
+
+def test_oom_on_large_batch_then_succeeds_when_split():
+    calls, freed = [], []
+
+    def call(chunk):
+        calls.append(len(chunk))
+        if len(chunk) > 2:
+            raise FakeOOM("CUDA out of memory. Tried to allocate 2.00 GiB")
+        return [_poly(b) for b in chunk], list(range(len(chunk)))
+
+    stats: Counter = Counter()
+    out = segment_in_batches(_boxes(8), call, 8, stats, on_oom=lambda: freed.append(1))
+    assert [_box_id(p) for p in out] == list(range(8))
+    assert calls == [8, 4, 2, 2, 4, 2, 2]
+    assert len(freed) == 3
+    assert {k: stats[k] for k in RECOVERY_KEYS} == _stats(sam_calls=4, oom_retries=3)
+
+
+def test_oom_even_for_single_box_gives_rectangle():
+    def call(chunk):
+        if any(int(b[0]) == 1 for b in chunk):
+            raise FakeOOM("CUDA out of memory")
+        return [_poly(b) for b in chunk], list(range(len(chunk)))
+
+    stats: Counter = Counter()
+    out = segment_in_batches(_boxes(4), call, 4, stats)
+    assert [None if p is None else _box_id(p) for p in out] == [0, None, 2, 3]
+    assert stats["rect_oom"] == 1 and stats["rect_missing_mask"] == 0
+    assert stats["oom_retries"] == 2  # 4 -> 2 -> 1
+
+
+def test_non_oom_error_is_raised():
+    def call(chunk):
+        raise ValueError("loi khac")
+
+    with pytest.raises(ValueError):
+        segment_in_batches(_boxes(2), call, 2, Counter())
+
+
+def test_is_oom_error_and_invalid_batch_size():
+    assert is_oom_error(FakeOOM("x"))
+    assert is_oom_error(RuntimeError("CUDA out of memory. Tried to allocate"))
+    assert not is_oom_error(RuntimeError("other"))
+    with pytest.raises(ValueError):
+        segment_in_batches(_boxes(1), lambda c: ([], []), 0, Counter())
