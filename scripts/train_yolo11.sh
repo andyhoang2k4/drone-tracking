@@ -26,7 +26,7 @@ import yaml
 
 sys.path.insert(0, str(Path.cwd()))
 from src.utils.logging_utils import write_json
-from src.utils.run_context import build_run_context
+from src.utils.run_context import build_run_context, dataset_info
 
 config_path, model_key, experiment_id, *extra = sys.argv[1:]
 cfg = yaml.safe_load(Path(config_path).read_text(encoding="utf-8"))
@@ -40,6 +40,13 @@ for item in extra:
     key, _, value = item.partition("=")
     train_kwargs[key] = yaml.safe_load(value)
 
+dataset = dataset_info(Path(cfg["data"]))
+if dataset["name"] is None:
+    print(f"[train] CANH BAO: khong doc duoc ten/version dataset tu {cfg['data']} "
+          "(thieu manifest.json cua prepare_visdrone.py?)")
+else:
+    print(f"[train] dataset       = {dataset['name']} v{dataset['version']}")
+
 exp_dir = Path(cfg["output_root"]) / experiment_id
 exp_dir.mkdir(parents=True, exist_ok=True)
 
@@ -48,7 +55,7 @@ write_json(
     build_run_context(
         experiment_id=experiment_id,
         config={"model": model_cfg, **train_kwargs},
-        dataset=cfg["data"],
+        dataset=dataset,
         repo_root=Path.cwd(),
     ),
 )

@@ -6,11 +6,15 @@ ultralytics/torch. O vong benchmark cuoi bo sung them Python/CUDA/GPU model.
 
 from __future__ import annotations
 
+import json
 import platform
 import subprocess
 import sys
 from pathlib import Path
-from typing import Any, Mapping, Optional
+from typing import Any, Mapping, Optional, Union
+
+# Ten file thong ke do scripts/prepare_visdrone.py ghi trong thu muc dataset.
+DATASET_MANIFEST_NAME = "manifest.json"
 
 
 def _git(*args: str, repo_root: Optional[Path] = None) -> Optional[str]:
@@ -88,11 +92,52 @@ def hardware_info() -> dict[str, Any]:
     return info
 
 
+def dataset_info(dataset_yaml: Path) -> dict[str, Any]:
+    """Ten + version dataset ma mot dataset yaml cua Ultralytics tro toi.
+
+    Doc `path` trong dataset yaml, roi doc `manifest.json` (do
+    scripts/prepare_visdrone.py sinh) trong thu muc do. Khong co yaml/manifest
+    -> name/version = None (khong raise), de nguoi goi tu canh bao.
+    """
+    info: dict[str, Any] = {
+        "yaml": str(dataset_yaml),
+        "path": None,
+        "manifest": None,
+        "name": None,
+        "version": None,
+    }
+    try:
+        import yaml
+
+        data = yaml.safe_load(Path(dataset_yaml).read_text(encoding="utf-8")) or {}
+    except OSError:
+        return info
+    if not data.get("path"):
+        return info
+
+    root = Path(data["path"])
+    if not root.is_absolute():
+        root = Path(dataset_yaml).parent / root
+    info["path"] = str(root)
+    manifest_path = root / DATASET_MANIFEST_NAME
+    if not manifest_path.is_file():
+        return info
+
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    dataset = manifest.get("dataset") or {}
+    info.update(
+        manifest=str(manifest_path),
+        name=dataset.get("name"),
+        version=dataset.get("version"),
+    )
+    return info
+
+
 def build_run_context(
     *,
     experiment_id: str,
     config: Mapping[str, Any],
-    dataset: Optional[str] = None,
+    dataset: Union[str, Mapping[str, Any], None] = None,
     repo_root: Optional[Path] = None,
     extra: Optional[Mapping[str, Any]] = None,
 ) -> dict[str, Any]:
