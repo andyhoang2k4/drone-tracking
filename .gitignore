@@ -37,6 +37,9 @@ data/labeled/**
 data/occlusion_test_scenarios/**
 !data/**/.gitkeep
 !data/**/README.md
+# Sinh boi scripts/prepare_visdrone.py, chua duong dan tuyet doi cua tung may.
+# Mau commit duoc: data/dataset.example.yaml.
+data/dataset.yaml
 
 # ---- Model weights / checkpoint ----
 *.pt
