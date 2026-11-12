@@ -22,8 +22,8 @@ Vi du::
     # Smoke test tren CPU
     python scripts/generate_masks.py --splits val --max-images 5 --device cpu
 
-    # Day du tren cloud
-    python scripts/generate_masks.py --device 0
+    # Day du tren cloud (baseline: chi train/val, test giu nhan bbox)
+    python scripts/generate_masks.py --splits train val --device 0
 """
 
 from __future__ import annotations

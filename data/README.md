@@ -51,8 +51,12 @@ Giai doan B (them tau thuyen) se la dataset version rieng.
 
    ```bash
    python scripts/generate_masks.py --splits val --max-images 5 --device cpu  # smoke
-   python scripts/generate_masks.py --device 0                                  # day du
+   python scripts/generate_masks.py --splits train val --device 0                # day du
    ```
+
+   Baseline (dataset version 2) chi sinh mask cho **train va val**. Test giu
+   nhan bbox goc trong `labels/test` (khong co `labels_bbox/test`), nen tren
+   test chi danh gia box, khong danh gia mask.
 
    Box goc duoc chuyen sang `labels_bbox/`, polygon ghi vao `labels/`. Mask
    lech (IoU bbox-cua-mask vs box goc < `masks.fallback_iou`) thay bang hinh
