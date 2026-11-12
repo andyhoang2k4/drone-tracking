@@ -54,6 +54,12 @@ runs/
 experiments/**/weights/
 experiments/**/videos/
 experiments/**/logs/
+# Output Ultralytics sinh ra khi train/val (plots, anh batch, bang ket qua).
+# So lieu chinh chep sang metrics.json de commit.
+experiments/**/*.png
+experiments/**/*.jpg
+experiments/**/*.jpeg
+experiments/**/results.csv
 
 # ---- Media sinh ra ----
 *.mp4
