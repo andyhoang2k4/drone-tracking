@@ -47,6 +47,8 @@ from src.utils.logging_utils import write_json  # noqa: E402
 BOX_LABEL_DIR = "labels_bbox"
 SEG_LABEL_DIR = "labels"
 IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png"}
+# So ten anh toi da liet ke trong manifest cho moi split (anh co lech mask/OOM).
+MAX_FLAGGED_IMAGE_NAMES = 100
 
 # segment_fn(xyxy_px (N, 4)) -> N polygon, moi polygon (K, 2) toa do chuan hoa
 SegmentFn = Callable[[np.ndarray], Sequence[np.ndarray]]
@@ -318,6 +320,9 @@ def process_split(
     sam: Callable[[np.ndarray, np.ndarray, Counter], list],
     fallback_iou: float,
     max_images: Optional[int],
+    *,
+    sam_conf: Optional[float] = None,
+    sam_box_batch: Optional[int] = None,
 ) -> dict:
     import cv2
     from tqdm import tqdm
@@ -339,9 +344,11 @@ def process_split(
     stats: Counter = Counter()
     recovery: Counter = Counter({key: 0 for key in RECOVERY_KEYS})
     ious: list[float] = []
+    flagged: list[str] = []
     for img_path in tqdm(images, desc=f"SAM {split}"):
         box_lines = (box_dir / f"{img_path.stem}.txt").read_text(encoding="utf-8").splitlines()
         lines: list[str] = []
+        before = {key: recovery[key] for key in RECOVERY_KEYS if key != "sam_calls"}
         if any(line.strip() for line in box_lines):
             image = cv2.imread(str(img_path))
             if image is None:
@@ -360,12 +367,23 @@ def process_split(
             "\n".join(lines) + ("\n" if lines else ""), encoding="utf-8"
         )
         stats["images"] += 1
+        if any(recovery[key] != value for key, value in before.items()):
+            flagged.append(img_path.name)
 
     return {
         "images": stats.pop("images", 0),
         "max_images": max_images,
+        "sam_conf": sam_conf,
+        "sam_box_batch": sam_box_batch,
         "per_class": dict(stats),
         "iou": summarize_ious(ious, fallback_iou),
+        "sam_recovery": {key: recovery[key] for key in RECOVERY_KEYS},
+        # Anh co lech so mask / OOM (bat ky so dem nao ngoai sam_calls tang).
+        "flagged_images": {
+            "count": len(flagged),
+            "names": flagged[:MAX_FLAGGED_IMAGE_NAMES],
+            "truncated": len(flagged) > MAX_FLAGGED_IMAGE_NAMES,
+        },
     }
 
 
@@ -427,9 +445,12 @@ def main(argv: Optional[list[str]] = None) -> int:
     report = {"sam_model": sam_model, "fallback_iou": fallback_iou, "splits": {}}
     for split in args.splits:
         report["splits"][split] = process_split(
-            dataset_dir, split, sam, fallback_iou, args.max_images
+            dataset_dir, split, sam, fallback_iou, args.max_images,
+            sam_conf=sam_conf, sam_box_batch=sam_box_batch,
         )
-        print(f"[{split}] {report['splits'][split]['iou']}")
+        print(f"[{split}] iou={report['splits'][split]['iou']}")
+        print(f"[{split}] sam_recovery={report['splits'][split]['sam_recovery']} "
+              f"flagged_images={report['splits'][split]['flagged_images']['count']}")
 
     # Ghi them vao manifest cua prepare_visdrone.py (neu co).
     manifest_path = dataset_dir / "manifest.json"

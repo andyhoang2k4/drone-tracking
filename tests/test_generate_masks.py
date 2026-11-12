@@ -239,3 +239,67 @@ def test_is_oom_error_and_invalid_batch_size():
     assert not is_oom_error(RuntimeError("other"))
     with pytest.raises(ValueError):
         segment_in_batches(_boxes(1), lambda c: ([], []), 0, Counter())
+
+
+def test_process_split_records_recovery_in_report(tmp_path: Path):
+    """SAM gia bo mask cua box thu 2 o anh a.jpg -> report dem phuc hoi + ten anh."""
+    import cv2
+
+    (tmp_path / "images" / "train").mkdir(parents=True)
+    (tmp_path / "labels" / "train").mkdir(parents=True)
+    for name in ("a", "b"):
+        cv2.imwrite(str(tmp_path / "images" / "train" / f"{name}.jpg"), np.zeros((20, 40, 3), np.uint8))
+    (tmp_path / "labels" / "train" / "a.txt").write_text(
+        "0 0.3 0.5 0.2 0.4\n1 0.7 0.5 0.2 0.4\n", encoding="utf-8"
+    )
+    (tmp_path / "labels" / "train" / "b.txt").write_text("0 0.5 0.5 0.2 0.4\n", encoding="utf-8")
+
+    def rect(box):
+        x1, y1, x2, y2 = box / [40, 20, 40, 20]
+        return np.array([[x1, y1], [x2, y1], [x2, y2], [x1, y2]])
+
+    def call(chunk):
+        keep = [j for j, b in enumerate(chunk) if b[0] < 20]  # bo box ben phai
+        return [rect(chunk[j]) for j in keep], keep
+
+    def fake_sam(image, xyxy_px, stats):
+        return segment_in_batches(xyxy_px, call, 8, stats)
+
+    report = process_split(tmp_path, "train", fake_sam, 0.5, None, sam_conf=0.0, sam_box_batch=8)
+    assert report["sam_conf"] == 0.0 and report["sam_box_batch"] == 8
+    assert report["sam_recovery"] == {
+        "sam_calls": 3, "count_mismatch_calls": 2, "retried_single_boxes": 1,
+        "rect_missing_mask": 1, "oom_retries": 0, "rect_oom": 0,
+    }
+    assert report["flagged_images"] == {"count": 1, "names": ["a.jpg"], "truncated": False}
+    # Box bi mat mask van co nhan (hinh chu nhat), khong bi bo
+    assert len((tmp_path / "labels" / "train" / "a.txt").read_text().splitlines()) == 2
+
+
+def test_main_writes_sam_settings_to_manifest(tmp_path: Path, monkeypatch):
+    import json
+
+    import cv2
+
+    import scripts.generate_masks as gm
+
+    (tmp_path / "images" / "val").mkdir(parents=True)
+    (tmp_path / "labels" / "val").mkdir(parents=True)
+    cv2.imwrite(str(tmp_path / "images" / "val" / "a.jpg"), np.zeros((20, 40, 3), np.uint8))
+    (tmp_path / "labels" / "val" / "a.txt").write_text("0 0.5 0.5 0.2 0.4\n", encoding="utf-8")
+
+    seen = {}
+
+    def fake_load_sam(model, weights_dir, device, conf, box_batch):
+        seen.update(conf=conf, box_batch=box_batch)
+        return lambda image, xyxy, stats: [None] * len(xyxy)
+
+    monkeypatch.setattr(gm, "load_sam", fake_load_sam)
+    assert gm.main(["--dataset-dir", str(tmp_path), "--splits", "val", "--sam-box-batch", "4"]) == 0
+    split = json.loads((tmp_path / "manifest.json").read_text())["masks"]["splits"]["val"]
+    assert seen == {"conf": 0.0, "box_batch": 4}  # sam_conf tu config repo, batch tu CLI
+    assert split["sam_conf"] == 0.0 and split["sam_box_batch"] == 4
+    assert set(split["sam_recovery"]) == set(gm.RECOVERY_KEYS)
+
+    with pytest.raises(ValueError):
+        gm.main(["--dataset-dir", str(tmp_path), "--splits", "val", "--sam-box-batch", "0"])

@@ -57,6 +57,12 @@ Giai doan B (them tau thuyen) se la dataset version rieng.
    python scripts/generate_masks.py --splits train val --device 0                # day du
    ```
 
+   SAM ma hoa moi anh mot lan roi giai ma theo nhom `masks.sam_box_batch` box;
+   `masks.sam_conf: 0.0` de Ultralytics khong bo mask diem thap. Box thieu mask
+   duoc goi lai rieng, OOM thi tu chia nho nhom; van that bai thi dung hinh chu
+   nhat. So lan xay ra ghi o `manifest.json` -> `masks.splits.<split>.sam_recovery`
+   va `flagged_images`.
+
    Baseline (dataset version 2) chi sinh mask cho **train va val**. Test giu
    nhan bbox goc trong `labels/test` (khong co `labels_bbox/test`), nen tren
    test chi danh gia box, khong danh gia mask.
