@@ -34,6 +34,10 @@ common:
   fliplr: 0.5
   mosaic: 1.0
 
+# Thu muc chua weights pretrained da tai san (gitignore). Train dung
+# <weights_dir>/<weights> neu co; khong co thi Ultralytics tu tai theo ten.
+weights_dir: weights
+
 models:
   yolo11_seg:
     weights: yolo11n-seg.pt

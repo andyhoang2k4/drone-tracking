@@ -40,6 +40,14 @@ for item in extra:
     key, _, value = item.partition("=")
     train_kwargs[key] = yaml.safe_load(value)
 
+local_weights = Path(cfg.get("weights_dir", "weights")) / model_cfg["weights"]
+if local_weights.is_file():
+    weights = str(local_weights)
+else:
+    weights = model_cfg["weights"]
+    print(f"[train] CANH BAO: khong thay {local_weights}, Ultralytics se tai {weights}")
+print(f"[train] weights       = {weights}")
+
 dataset = dataset_info(Path(cfg["data"]))
 if dataset["name"] is None:
     print(f"[train] CANH BAO: khong doc duoc ten/version dataset tu {cfg['data']} "
@@ -54,7 +62,7 @@ write_json(
     exp_dir / "run_context.json",
     build_run_context(
         experiment_id=experiment_id,
-        config={"model": model_cfg, **train_kwargs},
+        config={"model": {**model_cfg, "weights_path": weights}, **train_kwargs},
         dataset=dataset,
         repo_root=Path.cwd(),
     ),
@@ -62,7 +70,7 @@ write_json(
 
 from ultralytics import YOLO
 
-model = YOLO(model_cfg["weights"])
+model = YOLO(weights)
 results = model.train(project=str(exp_dir), name="train", **train_kwargs)
 print(f"[train] xong. Ket qua trong {exp_dir}")
 PY
