@@ -142,9 +142,12 @@ def dataset_info(dataset_yaml: Path) -> dict[str, Any]:
     max_sequences = manifest.get("max_sequences")
     if max_sequences is not None:
         reasons.append(f"prepare_visdrone.py --max-sequences {max_sequences}")
-    mask_max_images = (manifest.get("masks") or {}).get("max_images")
-    if mask_max_images is not None:
-        reasons.append(f"generate_masks.py --max-images {mask_max_images}")
+    # generate_masks.py ghi max_images theo tung split: masks.splits.<split>.max_images
+    mask_splits = (manifest.get("masks") or {}).get("splits") or {}
+    for split, split_report in sorted(mask_splits.items()):
+        mask_max_images = (split_report or {}).get("max_images")
+        if mask_max_images is not None:
+            reasons.append(f"generate_masks.py --max-images {mask_max_images} ({split})")
     info["partial_reasons"] = reasons
     if reasons:
         info["partial"] = True

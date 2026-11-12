@@ -39,7 +39,9 @@ def test_dataset_info_full_run_not_partial(tmp_path: Path):
     yaml_path = _write_dataset(
         tmp_path, "labeled/visdrone_mot_a_v2",
         {"dataset": {"name": "d", "version": 2}, "max_sequences": None,
-         "masks": {"splits": {}, "max_images": None}},
+         "masks": {"sam_model": "sam_b.pt", "splits": {
+             "train": {"images": 10, "max_images": None},
+             "val": {"images": 3, "max_images": None}}}},
     )
     info = dataset_info(yaml_path)
     assert info["partial"] is False
@@ -60,11 +62,13 @@ def test_dataset_info_smoke_masks_is_partial(tmp_path: Path):
     yaml_path = _write_dataset(
         tmp_path, "labeled/visdrone_mot_a_v2",
         {"dataset": {"name": "d", "version": 2}, "max_sequences": None,
-         "masks": {"max_images": 5}},
+         "masks": {"sam_model": "sam_b.pt", "splits": {
+             "train": {"images": 10, "max_images": None},
+             "val": {"images": 5, "max_images": 5}}}},
     )
     info = dataset_info(yaml_path)
     assert info["partial"] is True
-    assert info["partial_reasons"] == ["generate_masks.py --max-images 5"]
+    assert info["partial_reasons"] == ["generate_masks.py --max-images 5 (val)"]
 
 
 def test_dataset_info_manifest_without_key_is_unknown(tmp_path: Path):
@@ -155,3 +159,30 @@ def test_train_script_stops_on_partial_dataset(tmp_path: Path, model: str):
     assert result.returncode != 0
     assert "DUNG" in result.stderr and "--max-sequences 1" in result.stderr
     assert not (tmp_path / "experiments" / "exp_001").exists()
+
+
+def test_dataset_info_on_real_manifests(tmp_path: Path, monkeypatch):
+    """Manifest that do prepare_visdrone.py + generate_masks.py ghi (SAM gia)."""
+    import scripts.generate_masks as gm
+    from scripts.prepare_visdrone import main as prepare_main
+    from tests.test_prepare_visdrone import _write_fake_visdrone
+
+    src, out, yaml_path = tmp_path / "raw", tmp_path / "labeled", tmp_path / "dataset.yaml"
+    _write_fake_visdrone(src)
+    assert prepare_main(["--source-root", str(src), "--output-dir", str(out),
+                         "--dataset-yaml", str(yaml_path), "--link-mode", "copy"]) == 0
+    assert dataset_info(yaml_path)["partial"] is False
+
+    monkeypatch.setattr(gm, "load_sam", lambda *a, **k: (lambda img, xyxy: [None] * len(xyxy)))
+    assert gm.main(["--dataset-dir", str(out), "--splits", "train", "val",
+                    "--max-images", "1"]) == 0
+    info = dataset_info(yaml_path)
+    assert info["partial"] is True
+    assert info["partial_reasons"] == [
+        "generate_masks.py --max-images 1 (train)",
+        "generate_masks.py --max-images 1 (val)",
+    ]
+
+    # Chay du lai -> het partial
+    assert gm.main(["--dataset-dir", str(out), "--splits", "train", "val"]) == 0
+    assert dataset_info(yaml_path)["partial"] is False
