@@ -35,6 +35,45 @@ def test_dataset_info_reads_name_version_from_manifest(tmp_path: Path):
     assert info["manifest"] == str(dataset_dir / "manifest.json")
 
 
+def test_dataset_info_full_run_not_partial(tmp_path: Path):
+    yaml_path = _write_dataset(
+        tmp_path, "labeled/visdrone_mot_a_v2",
+        {"dataset": {"name": "d", "version": 2}, "max_sequences": None,
+         "masks": {"splits": {}, "max_images": None}},
+    )
+    info = dataset_info(yaml_path)
+    assert info["partial"] is False
+    assert info["partial_reasons"] == []
+
+
+def test_dataset_info_smoke_prepare_is_partial(tmp_path: Path):
+    yaml_path = _write_dataset(
+        tmp_path, "labeled/visdrone_mot_a_v2",
+        {"dataset": {"name": "d", "version": 2}, "max_sequences": 1},
+    )
+    info = dataset_info(yaml_path)
+    assert info["partial"] is True
+    assert info["partial_reasons"] == ["prepare_visdrone.py --max-sequences 1"]
+
+
+def test_dataset_info_smoke_masks_is_partial(tmp_path: Path):
+    yaml_path = _write_dataset(
+        tmp_path, "labeled/visdrone_mot_a_v2",
+        {"dataset": {"name": "d", "version": 2}, "max_sequences": None,
+         "masks": {"max_images": 5}},
+    )
+    info = dataset_info(yaml_path)
+    assert info["partial"] is True
+    assert info["partial_reasons"] == ["generate_masks.py --max-images 5"]
+
+
+def test_dataset_info_manifest_without_key_is_unknown(tmp_path: Path):
+    yaml_path = _write_dataset(
+        tmp_path, "labeled/visdrone_mot_a_v2", {"dataset": {"name": "d", "version": 2}}
+    )
+    assert dataset_info(yaml_path)["partial"] is None
+
+
 def test_dataset_info_relative_path_resolves_from_yaml_dir(tmp_path: Path):
     yaml_path = _write_dataset(
         tmp_path, "labeled/visdrone_mot_a_v2", {"dataset": {"name": "d", "version": 1}}
@@ -46,6 +85,7 @@ def test_dataset_info_without_manifest_returns_none(tmp_path: Path):
     yaml_path = _write_dataset(tmp_path, str(tmp_path / "labeled" / "visdrone_mot_a_v2"), None)
     info = dataset_info(yaml_path)
     assert info["name"] is None and info["version"] is None and info["manifest"] is None
+    assert info["partial"] is None
 
 
 def test_dataset_info_missing_yaml(tmp_path: Path):

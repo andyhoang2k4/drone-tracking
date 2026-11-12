@@ -98,6 +98,11 @@ def dataset_info(dataset_yaml: Path) -> dict[str, Any]:
     Doc `path` trong dataset yaml, roi doc `manifest.json` (do
     scripts/prepare_visdrone.py sinh) trong thu muc do. Khong co yaml/manifest
     -> name/version = None (khong raise), de nguoi goi tu canh bao.
+
+    `partial`: True neu dataset la ban chay thu (prepare_visdrone.py
+    --max-sequences, hoac generate_masks.py --max-images), False neu chay du,
+    None neu khong xac dinh duoc (khong co manifest). Ly do nam trong
+    `partial_reasons`.
     """
     info: dict[str, Any] = {
         "yaml": str(dataset_yaml),
@@ -105,6 +110,8 @@ def dataset_info(dataset_yaml: Path) -> dict[str, Any]:
         "manifest": None,
         "name": None,
         "version": None,
+        "partial": None,
+        "partial_reasons": [],
     }
     try:
         import yaml
@@ -130,6 +137,20 @@ def dataset_info(dataset_yaml: Path) -> dict[str, Any]:
         name=dataset.get("name"),
         version=dataset.get("version"),
     )
+
+    reasons: list[str] = []
+    max_sequences = manifest.get("max_sequences")
+    if max_sequences is not None:
+        reasons.append(f"prepare_visdrone.py --max-sequences {max_sequences}")
+    mask_max_images = (manifest.get("masks") or {}).get("max_images")
+    if mask_max_images is not None:
+        reasons.append(f"generate_masks.py --max-images {mask_max_images}")
+    info["partial_reasons"] = reasons
+    if reasons:
+        info["partial"] = True
+    elif "max_sequences" in manifest:
+        info["partial"] = False
+    # Manifest khong co key max_sequences (ban cu) -> partial = None.
     return info
 
 
