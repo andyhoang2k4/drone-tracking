@@ -6,11 +6,15 @@ ultralytics/torch. O vong benchmark cuoi bo sung them Python/CUDA/GPU model.
 
 from __future__ import annotations
 
+import json
 import platform
 import subprocess
 import sys
 from pathlib import Path
-from typing import Any, Mapping, Optional
+from typing import Any, Mapping, Optional, Union
+
+# Ten file thong ke do scripts/prepare_visdrone.py ghi trong thu muc dataset.
+DATASET_MANIFEST_NAME = "manifest.json"
 
 
 def _git(*args: str, repo_root: Optional[Path] = None) -> Optional[str]:
@@ -88,11 +92,89 @@ def hardware_info() -> dict[str, Any]:
     return info
 
 
+def dataset_info(dataset_yaml: Path) -> dict[str, Any]:
+    """Ten + version dataset ma mot dataset yaml cua Ultralytics tro toi.
+
+    Doc `path` trong dataset yaml, roi doc `manifest.json` (do
+    scripts/prepare_visdrone.py sinh) trong thu muc do. Khong co yaml/manifest
+    -> name/version = None (khong raise), de nguoi goi tu canh bao.
+
+    `partial`: True neu dataset la ban chay thu (prepare_visdrone.py
+    --max-sequences, hoac generate_masks.py --max-images), False neu chay du,
+    None neu khong xac dinh duoc (khong co manifest). Ly do nam trong
+    `partial_reasons`.
+    """
+    info: dict[str, Any] = {
+        "yaml": str(dataset_yaml),
+        "path": None,
+        "manifest": None,
+        "name": None,
+        "version": None,
+        "partial": None,
+        "partial_reasons": [],
+    }
+    try:
+        import yaml
+
+        data = yaml.safe_load(Path(dataset_yaml).read_text(encoding="utf-8")) or {}
+    except OSError:
+        return info
+    if not data.get("path"):
+        return info
+
+    root = Path(data["path"])
+    if not root.is_absolute():
+        root = Path(dataset_yaml).parent / root
+    info["path"] = str(root)
+    manifest_path = root / DATASET_MANIFEST_NAME
+    if not manifest_path.is_file():
+        return info
+
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    dataset = manifest.get("dataset") or {}
+    info.update(
+        manifest=str(manifest_path),
+        name=dataset.get("name"),
+        version=dataset.get("version"),
+    )
+
+    reasons: list[str] = []
+    max_sequences = manifest.get("max_sequences")
+    if max_sequences is not None:
+        reasons.append(f"prepare_visdrone.py --max-sequences {max_sequences}")
+    # generate_masks.py ghi max_images theo tung split: masks.splits.<split>.max_images
+    mask_splits = (manifest.get("masks") or {}).get("splits") or {}
+    for split, split_report in sorted(mask_splits.items()):
+        mask_max_images = (split_report or {}).get("max_images")
+        if mask_max_images is not None:
+            reasons.append(f"generate_masks.py --max-images {mask_max_images} ({split})")
+    info["partial_reasons"] = reasons
+    if reasons:
+        info["partial"] = True
+    elif "max_sequences" in manifest:
+        info["partial"] = False
+    # Manifest khong co key max_sequences (ban cu) -> partial = None.
+    return info
+
+
+def partial_dataset_error(info: Mapping[str, Any], allow_partial: bool) -> Optional[str]:
+    """Thong bao loi neu dataset la ban chay thu ma khong cho phep; None neu duoc chay."""
+    if not info.get("partial") or allow_partial:
+        return None
+    reasons = ", ".join(info.get("partial_reasons") or []) or "khong ro"
+    return (
+        f"Dataset {info.get('name')} v{info.get('version')} la ban CHAY THU ({reasons}); "
+        f"manifest: {info.get('manifest')}. Chay lai prepare_visdrone.py --overwrite "
+        "(va generate_masks.py) khong co gioi han truoc khi train, hoac truyen "
+        "--allow-partial neu co y train tren ban nay."
+    )
+
+
 def build_run_context(
     *,
     experiment_id: str,
     config: Mapping[str, Any],
-    dataset: Optional[str] = None,
+    dataset: Union[str, Mapping[str, Any], None] = None,
     repo_root: Optional[Path] = None,
     extra: Optional[Mapping[str, Any]] = None,
 ) -> dict[str, Any]:

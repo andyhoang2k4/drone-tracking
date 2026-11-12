@@ -35,6 +35,13 @@ Nếu một task có vẻ dẫn tới các việc ở nhóm "không cần" phía
 
 **Ngoại lệ (quyết định 2026-10-26): lớp mô phỏng bay.** Việc dựng mô phỏng PX4 SITL + Gazebo (tay điều khiển ảo, màn hình camera có OSD, chọn/khóa mục tiêu, bay bám và bay tìm khi mất mục tiêu) nằm RIÊNG trong `src/sim/` và được phép làm, không cần hỏi lại. Ràng buộc: lớp này chỉ nhận đầu ra của pipeline (track ID, bbox, state) qua interface, không sửa detect/track/motion memory; dùng lại `TrackState` của `motion_memory.py`; không dùng để đánh giá motion memory. Việc port PX4 cho board FK743M2-IIT6 vẫn nằm ngoài phạm vi repo này.
 
+**Thời điểm dùng `src/sim/` (quyết định 2026-11-13).** Trước khi xong roadmap bước 2 (mục 16), không cài PX4/Gazebo và không đầu tư thêm vào `src/sim/`; chỉ chế độ `--demo` là đủ. Lớp mô phỏng được dùng theo 3 mốc:
+1. **Sau bước 2** (có weights YOLO đã train): chạy `scripts/run_sim.py --video <clip> --weights <W>` để xem YOLO + BoT-SORT thật trên OSD, chọn/khóa mục tiêu. Không cần PX4/Gazebo.
+2. **Sau bước 5** (Motion Memory chạy được): thay heuristic ngoại suy tạm trong `src/sim/target_manager.py` bằng `MotionMemory`, rồi chạy PX4 SITL + Gazebo để kiểm tra vòng kín: bám mục tiêu, bay tìm đúng hướng khi bị che khuất, bắt lại khi mục tiêu xuất hiện lại, độ mượt của lệnh bay.
+3. **Trước khi lên phần cứng thật:** dùng sim để chỉnh tham số bám (khoảng cách, tốc độ yaw, timeout) và thử các tình huống nguy hiểm.
+
+Số liệu đánh giá (mục 12) vẫn đo trên video có ground truth qua `src/evaluate.py`, không đo trên sim.
+
 ## 3. Môi trường phát triển
 
 | | Local Dev | Cloud PC |

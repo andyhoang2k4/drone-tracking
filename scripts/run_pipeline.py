@@ -34,6 +34,7 @@ from src.track import (  # noqa: E402
     iter_tracks,
     track_record_to_observation,
 )
+from src.utils.inference_settings import DEFAULT_TRAIN_CONFIG, resolve_imgsz  # noqa: E402
 from src.utils.logging_utils import JsonlLogger, write_json  # noqa: E402
 from src.utils.run_context import build_run_context  # noqa: E402
 
@@ -55,7 +56,14 @@ def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
     )
     parser.add_argument("--tracker", type=Path, default=DEFAULT_TRACKER_CONFIG)
     parser.add_argument("--conf", type=float, default=0.25)
-    parser.add_argument("--imgsz", type=int, default=640)
+    parser.add_argument(
+        "--imgsz",
+        type=int,
+        default=None,
+        help="Bo trong = detector.imgsz trong experiments/<id>/config.yaml, roi "
+        "run_context.json canh weights, roi configs/train_config.yaml",
+    )
+    parser.add_argument("--train-config", type=Path, default=DEFAULT_TRAIN_CONFIG)
     parser.add_argument("--device", default=None, help='vd "0" hoac "cpu"')
     parser.add_argument("--classes", type=int, nargs="*", default=None)
     parser.add_argument(
@@ -83,6 +91,19 @@ def main(argv: Optional[list[str]] = None) -> int:
     exp_dir = Path(args.output_root) / args.experiment_id
     log_path = exp_dir / "logs" / "pipeline.jsonl"
 
+    # imgsz: CLI > experiment > train_config (src/utils/inference_settings.py).
+    # Ghi vao run_context de so sanh co/khong Motion Memory cung imgsz.
+    choice = resolve_imgsz(
+        args.imgsz,
+        experiment_dir=exp_dir,
+        weights=args.weights,
+        train_config=args.train_config,
+    )
+    args.imgsz = choice.imgsz
+    print(f"imgsz = {choice.imgsz} (nguon: {choice.source})")
+    for warning in choice.warnings:
+        print(f"CANH BAO: {warning}")
+
     # Metadata tai hien experiment (CLAUDE.md muc 14)
     write_json(
         exp_dir / "run_context.json",
@@ -91,6 +112,7 @@ def main(argv: Optional[list[str]] = None) -> int:
             config=vars(args),
             dataset=args.source,
             repo_root=REPO_ROOT,
+            extra={"inference": choice.as_dict()},
         ),
     )
 
@@ -110,7 +132,7 @@ def main(argv: Optional[list[str]] = None) -> int:
             args.source,
             tracker=args.tracker,
             conf=args.conf,
-            imgsz=args.imgsz,
+            imgsz=choice.imgsz,
             device=args.device,
             classes=args.classes,
         ):

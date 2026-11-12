@@ -1,7 +1,8 @@
 # Config train chung cho YOLO11-seg va YOLO26-seg (xem CLAUDE.md muc 16 buoc 2)
 #
 # Nguyen tac: HAI model dung CHUNG khoi `common` de so sanh cong bang
-# (cung dataset/split/imgsz/epochs/augmentation). Chi khac `weights`.
+# (cung dataset/split/imgsz/epochs/augmentation/seed). Chi khac `weights`.
+# Baseline: ca hai dung size n (yolo11n-seg / yolo26n-seg).
 # Khong hardcode gia tri nay trong code - moi script doc tu day.
 
 # Dataset yaml theo dinh dang Ultralytics.
@@ -11,7 +12,7 @@ data: data/dataset.yaml
 
 common:
   epochs: 100
-  imgsz: 640
+  imgsz: 960          # baseline 2026-11-13: VisDrone vat the nho, 640 qua thap
   batch: 8
   workers: 4
   device: 0            # index GPU tren cloud PC; "cpu" khi smoke test local
@@ -32,6 +33,10 @@ common:
   scale: 0.5
   fliplr: 0.5
   mosaic: 1.0
+
+# Thu muc chua weights pretrained da tai san (gitignore). Train dung
+# <weights_dir>/<weights> neu co; khong co thi Ultralytics tu tai theo ten.
+weights_dir: weights
 
 models:
   yolo11_seg:

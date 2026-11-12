@@ -1,4 +1,4 @@
-# Config chuan bi dataset giai doan A: VisDrone2019-MOT, 3 class.
+# Config chuan bi dataset giai doan A: VisDrone2019-MOT, 10 class goc.
 # Dung boi scripts/prepare_visdrone.py.
 #
 # File nay DINH NGHIA split (commit vao git): split theo SEQUENCE, dung
@@ -6,10 +6,15 @@
 # ngau nhien theo frame (CLAUDE.md muc 7). Doi split/anh xa class sau khi da
 # xem ket qua -> tao dataset version moi + experiment moi (CLAUDE.md muc 13).
 #
+# Lich su version:
+#   1: 3 class (person/car/motorcycle) - chua tung sinh/train, bo.
+#   2: giu 10 class goc cua VisDrone (baseline, quyet dinh 2026-11-13).
+#      Vung ignored (category 0, score=0) KHONG xu ly - de cho version sau.
+#
 # Giai doan B (them tau thuyen) se la dataset version KHAC, khong sua file nay.
 
 name: visdrone_mot_a
-version: 1
+version: 2
 
 # Thu muc chua 3 thu muc giai nen cua VisDrone2019-MOT. Moi thu muc co
 # sequences/<seq>/<frame>.jpg va annotations/<seq>.txt.
@@ -19,22 +24,32 @@ splits:
   val: VisDrone2019-MOT-val
   test: VisDrone2019-MOT-test-dev
 
-# Class cua project (id YOLO -> ten)
+# Class cua project (id YOLO -> ten), giu nguyen ten cua VisDrone.
 classes:
-  0: person
-  1: car
-  2: motorcycle
+  0: pedestrian
+  1: people
+  2: bicycle
+  3: car
+  4: van
+  5: truck
+  6: tricycle
+  7: awning-tricycle
+  8: bus
+  9: motor
 
-# object_category cua VisDrone -> class id project. Category khong co o day
-# (0 ignored region, 3 bicycle, 7 tricycle, 8 awning-tricycle, 9 bus,
-# 11 others) bi bo qua.
+# object_category cua VisDrone -> class id project (dich 1). Category khong
+# co o day (0 ignored region, 11 others) bi bo qua.
 category_map:
-  1: 0   # pedestrian -> person
-  2: 0   # people     -> person
-  4: 1   # car        -> car
-  5: 1   # van        -> car
-  6: 1   # truck      -> car
-  10: 2  # motor      -> motorcycle
+  1: 0
+  2: 1
+  3: 2
+  4: 3
+  5: 4
+  6: 5
+  7: 6
+  8: 7
+  9: 8
+  10: 9
 
 # Lay 1 frame moi N frame. Frame lien ke gan nhu giong het nhau nen train/val
 # khong can tat ca; test giu du frame de danh gia tracking/occlusion.
@@ -46,7 +61,8 @@ frame_stride:
 # Bo box nho hon nguong nay (pixel, sau khi cat theo bien anh).
 min_box_size: 2
 
-output_dir: data/labeled/visdrone_mot_a
+# Thu muc output co hau to version de cac version khong ghi de nhau.
+output_dir: data/labeled/visdrone_mot_a_v2
 
 # Sinh mask cho YOLO-seg tu box bang SAM (scripts/generate_masks.py).
 # Luu y: YOLO-seg tinh box train TU MASK, nen mask lech se lam box train lech.
@@ -56,3 +72,10 @@ output_dir: data/labeled/visdrone_mot_a
 masks:
   sam_model: sam_b.pt
   fallback_iou: 0.5
+  # Nguong diem mask cua Ultralytics: mask diem <= sam_conf bi bo. Mac dinh
+  # Ultralytics la 0.25 -> SAM tra ve it mask hon box. 0.0 = giu moi mask;
+  # mask kem van bi thay bang hinh chu nhat theo fallback_iou.
+  sam_conf: 0.0
+  # So box moi lan goi decoder SAM (anh chi ma hoa 1 lan). Gioi han bo nho:
+  # mask full-res float ~ 8 MB/box voi anh 1904x1071. OOM -> tu chia doi.
+  sam_box_batch: 32

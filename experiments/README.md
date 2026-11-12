@@ -14,6 +14,7 @@ Moi lan train/benchmark co mot thu muc rieng, ten la experiment ID ro rang
 | `weights/` | gitignore |
 | `videos/` | gitignore |
 | `logs/` | gitignore |
+| `*.png`, `*.jpg`, `results.csv` (output Ultralytics, vd `train/`) | gitignore - so lieu chinh chep sang `metrics.json` |
 
 ## Quy tac (CLAUDE.md muc 13, 14)
 

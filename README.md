@@ -38,7 +38,7 @@ khong sua ma nguon noi bo cua `ultralytics`.
 | `src/utils/` | Logger JSONL, thu thap metadata tai hien experiment |
 | `scripts/train_yolo11.sh`, `train_yolo26.sh` | Train - **chi chay tren Ubuntu/cloud** |
 | `scripts/run_pipeline.py` | Pipeline day du, co co `--motion-memory` cho ablation |
-| `scripts/prepare_visdrone.py` | Chuyen VisDrone2019-MOT sang dinh dang Ultralytics (giai doan A, 3 class) |
+| `scripts/prepare_visdrone.py` | Chuyen VisDrone2019-MOT sang dinh dang Ultralytics (giai doan A, 10 class) |
 | `scripts/generate_masks.py` | Sinh mask polygon tu box bang SAM, fallback hinh chu nhat khi mask lech |
 | `scripts/check_env.py` | Kiem tra Python, version package, CUDA, schema BoT-SORT, weight |
 | `data/` | Dataset (khong commit) - xem [data/README.md](data/README.md) |
@@ -111,6 +111,10 @@ python -m src.track --weights <best.pt> --source data/raw/clip01.mp4 \
 python scripts/run_pipeline.py --weights <best.pt> \
     --source data/occlusion_test_scenarios/scn01.mp4 \
     --experiment-id <exp_id> --target-track-id 1
+
+# imgsz: --imgsz > detector.imgsz trong experiments/<id>/config.yaml >
+# run_context.json canh weights > configs/train_config.yaml. Gia tri da dung
+# ghi vao <output>.meta.json (detect/track) va run_context.json (pipeline).
 
 # Train (chi tren Ubuntu/cloud)
 bash scripts/train_yolo11.sh yolo11_baseline_001

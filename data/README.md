@@ -26,10 +26,12 @@ Copy `dataset.example.yaml` thanh `dataset.yaml` (bi gitignore) va sua duong
 dan cho khop may dang chay. `configs/train_config.yaml` tro toi
 `data/dataset.yaml`.
 
-## Giai doan A: VisDrone2019-MOT (3 class)
+## Giai doan A: VisDrone2019-MOT (10 class, dataset version 2)
 
-Class: `person` (pedestrian + people), `car` (car + van + truck),
-`motorcycle` (motor). Anh xa va split: `configs/dataset_visdrone.yaml`.
+Class: giu nguyen 10 class cua VisDrone (pedestrian, people, bicycle, car,
+van, truck, tricycle, awning-tricycle, bus, motor); bo category 0 (ignored
+region) va 11 (others). Vung ignored chua duoc xu ly o version nay.
+Anh xa va split: `configs/dataset_visdrone.yaml`.
 Giai doan B (them tau thuyen) se la dataset version rieng.
 
 1. Tai VisDrone2019-MOT (train, val, test-dev) tu trang chinh thuc cua
@@ -43,14 +45,27 @@ Giai doan B (them tau thuyen) se la dataset version rieng.
    python scripts/prepare_visdrone.py --overwrite         # day du
    ```
 
-   Sinh `data/labeled/visdrone_mot_a/` (kem `manifest.json` thong ke) va
+   Sinh `data/labeled/visdrone_mot_a_v2/` (kem `manifest.json` thong ke) va
    `data/dataset.yaml`. Anh duoc hardlink, khong ton them dung luong.
+   Ban smoke test (`--max-sequences`, hay `generate_masks.py --max-images`)
+   duoc danh dau `partial` trong manifest; `scripts/train_*.sh` tu dung neu
+   gap dataset partial, tru khi truyen `--allow-partial`.
 3. Sinh mask cho YOLO-seg bang SAM - chay tren cloud (CPU ~10 s/anh):
 
    ```bash
    python scripts/generate_masks.py --splits val --max-images 5 --device cpu  # smoke
-   python scripts/generate_masks.py --device 0                                  # day du
+   python scripts/generate_masks.py --splits train val --device 0                # day du
    ```
+
+   SAM ma hoa moi anh mot lan roi giai ma theo nhom `masks.sam_box_batch` box;
+   `masks.sam_conf: 0.0` de Ultralytics khong bo mask diem thap. Box thieu mask
+   duoc goi lai rieng, OOM thi tu chia nho nhom; van that bai thi dung hinh chu
+   nhat. So lan xay ra ghi o `manifest.json` -> `masks.splits.<split>.sam_recovery`
+   va `flagged_images`.
+
+   Baseline (dataset version 2) chi sinh mask cho **train va val**. Test giu
+   nhan bbox goc trong `labels/test` (khong co `labels_bbox/test`), nen tren
+   test chi danh gia box, khong danh gia mask.
 
    Box goc duoc chuyen sang `labels_bbox/`, polygon ghi vao `labels/`. Mask
    lech (IoU bbox-cua-mask vs box goc < `masks.fallback_iou`) thay bang hinh

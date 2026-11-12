@@ -22,8 +22,8 @@ Vi du::
     # Smoke test tren CPU
     python scripts/generate_masks.py --splits val --max-images 5 --device cpu
 
-    # Day du tren cloud
-    python scripts/generate_masks.py --device 0
+    # Day du tren cloud (baseline: chi train/val, test giu nhan bbox)
+    python scripts/generate_masks.py --splits train val --device 0
 """
 
 from __future__ import annotations
@@ -47,9 +47,26 @@ from src.utils.logging_utils import write_json  # noqa: E402
 BOX_LABEL_DIR = "labels_bbox"
 SEG_LABEL_DIR = "labels"
 IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png"}
+# So ten anh toi da liet ke trong manifest cho moi split (anh co lech mask/OOM).
+MAX_FLAGGED_IMAGE_NAMES = 100
 
 # segment_fn(xyxy_px (N, 4)) -> N polygon, moi polygon (K, 2) toa do chuan hoa
 SegmentFn = Callable[[np.ndarray], Sequence[np.ndarray]]
+
+# Mot lan goi SAM cho mot nhom box: call_fn(xyxy_px (K, 4)) -> (polygons, prompt_idx)
+# voi polygons[j] la mask cua box thu prompt_idx[j] TRONG NHOM (SAM co the bo bot
+# mask hoac tra khong theo thu tu, nen phai ghep theo chi so, khong theo vi tri).
+SamCallFn = Callable[[np.ndarray], tuple[Sequence[Optional[np.ndarray]], Sequence[int]]]
+
+# So dem phuc hoi khi goi SAM (ghi vao manifest.json theo tung split).
+RECOVERY_KEYS = (
+    "sam_calls",             # so lan goi SAM thanh cong (khong OOM)
+    "count_mismatch_calls",  # lan goi tra so mask hop le != so box
+    "retried_single_boxes",  # box thieu mask -> goi lai rieng tung box
+    "rect_missing_mask",     # box van khong co mask -> hinh chu nhat
+    "oom_retries",           # OOM o nhom > 1 box -> chia doi va thu lai
+    "rect_oom",              # OOM ca khi goi 1 box -> hinh chu nhat
+)
 
 
 # ---------------- ham thuan (co unit test) ----------------
@@ -151,26 +168,133 @@ def summarize_ious(ious: Sequence[float], fallback_iou: float) -> dict:
     }
 
 
+def is_oom_error(exc: BaseException) -> bool:
+    """CUDA OOM (torch.cuda.OutOfMemoryError hoac RuntimeError 'out of memory')."""
+    return type(exc).__name__ == "OutOfMemoryError" or "out of memory" in str(exc).lower()
+
+
+def segment_in_batches(
+    xyxy_px: np.ndarray,
+    call_fn: SamCallFn,
+    batch_size: int,
+    stats: Counter,
+    on_oom: Optional[Callable[[], None]] = None,
+) -> list[Optional[np.ndarray]]:
+    """Goi SAM theo nhom <= batch_size box, ghep mask theo chi so box.
+
+    - Nhom tra thieu mask -> goi lai rieng tung box thieu.
+    - OOM o nhom > 1 box -> `on_oom()` (vd giai phong cache) roi chia doi nhom.
+    - Van khong co mask (hoac OOM ca khi 1 box) -> None; nguoi goi dung hinh chu
+      nhat cua box goc. Moi truong hop deu duoc dem vao `stats` (RECOVERY_KEYS),
+      khong raise va khong bo qua im lang.
+    """
+    if batch_size < 1:
+        raise ValueError(f"batch_size phai >= 1, nhan {batch_size}")
+    n = len(xyxy_px)
+    result: list[Optional[np.ndarray]] = [None] * n
+    oom_failed: set[int] = set()
+
+    def run(indices: list[int]) -> None:
+        try:
+            polygons, prompt_idx = call_fn(xyxy_px[indices])
+        except Exception as exc:  # noqa: BLE001 - chi nuot OOM, loi khac raise lai
+            if not is_oom_error(exc):
+                raise
+            if on_oom is not None:
+                on_oom()
+            if len(indices) == 1:
+                stats["rect_oom"] += 1
+                oom_failed.add(indices[0])
+                return
+            stats["oom_retries"] += 1
+            half = len(indices) // 2
+            run(indices[:half])
+            run(indices[half:])
+            return
+
+        stats["sam_calls"] += 1
+        assigned = 0
+        for polygon, local in zip(polygons, prompt_idx):
+            local = int(local)
+            if 0 <= local < len(indices) and result[indices[local]] is None:
+                result[indices[local]] = polygon
+                assigned += 1
+        if assigned != len(indices) or len(polygons) != len(indices):
+            stats["count_mismatch_calls"] += 1
+        if len(indices) > 1:
+            for i in indices:
+                if result[i] is None:
+                    stats["retried_single_boxes"] += 1
+                    run([i])
+
+    for start in range(0, n, batch_size):
+        run(list(range(start, min(start + batch_size, n))))
+
+    stats["rect_missing_mask"] += sum(
+        1 for i, poly in enumerate(result) if poly is None and i not in oom_failed
+    )
+    return result
+
+
 # ---------------- SAM ----------------
 
 
-def load_sam(model_name: str, weights_dir: Path, device: Optional[str]) -> SegmentFn:
-    """Nap SAM; tai weight vao weights_dir (gitignore) neu chua co."""
+# imgsz ma SAM.predict cua Ultralytics dat san; Predictor dung truc tiep mac dinh
+# 640 nen phai truyen ro de giu nguyen cach goi cu.
+SAM_IMGSZ = 1024
+
+
+def load_sam(
+    model_name: str,
+    weights_dir: Path,
+    device: Optional[str],
+    conf: float,
+    box_batch: int,
+) -> Callable[[np.ndarray, np.ndarray, Counter], list[Optional[np.ndarray]]]:
+    """Nap SAM; tai weight vao weights_dir (gitignore) neu chua co.
+
+    Tra ve segment(image, xyxy_px, stats): ma hoa anh MOT lan (Predictor.set_image),
+    roi chi chay decoder cho tung nhom <= box_batch box (segment_in_batches).
+    `conf`: nguong diem mask cua Ultralytics; mask diem <= conf bi bo (mac dinh
+    cua Ultralytics la 0.25 - nguyen nhan "SAM tra ve 9 mask cho 10 box").
+    """
     from ultralytics import SAM
+    from ultralytics.models.sam import Predictor
 
     weights_dir.mkdir(parents=True, exist_ok=True)
     previous_cwd = Path.cwd()
     os.chdir(weights_dir)
     try:
-        model = SAM(model_name)
+        sam_model = SAM(model_name)
     finally:
         os.chdir(previous_cwd)
 
-    def segment(image: np.ndarray, xyxy_px: np.ndarray) -> list[np.ndarray]:
-        result = model(image, bboxes=xyxy_px, verbose=False, save=False, device=device)[0]
-        if result.masks is None:
-            return [None] * len(xyxy_px)
-        return list(result.masks.xyn)
+    overrides = dict(conf=conf, imgsz=SAM_IMGSZ, task="segment", mode="predict", save=False, verbose=False)
+    if device is not None:
+        overrides["device"] = device
+    predictor = Predictor(overrides=overrides)
+    predictor.setup_model(model=sam_model.model, verbose=False)
+
+    def free_cuda_cache() -> None:
+        import torch
+
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+
+    def call(xyxy_chunk: np.ndarray) -> tuple[list, list[int]]:
+        # source=None -> dung anh + features da set_image, chi chay decoder.
+        result = predictor(bboxes=xyxy_chunk)[0]
+        if result.masks is None or result.boxes is None:
+            return [], []
+        # boxes.cls = chi so box goc trong nhom (postprocess cua SAM Predictor).
+        return list(result.masks.xyn), [int(c) for c in result.boxes.cls.tolist()]
+
+    def segment(image: np.ndarray, xyxy_px: np.ndarray, stats: Counter) -> list[Optional[np.ndarray]]:
+        predictor.set_image(image)
+        try:
+            return segment_in_batches(xyxy_px, call, box_batch, stats, on_oom=free_cuda_cache)
+        finally:
+            predictor.reset_image()
 
     return segment
 
@@ -193,9 +317,12 @@ def _ensure_box_labels(dataset_dir: Path, split: str) -> Path:
 def process_split(
     dataset_dir: Path,
     split: str,
-    sam: Callable[[np.ndarray, np.ndarray], list],
+    sam: Callable[[np.ndarray, np.ndarray, Counter], list],
     fallback_iou: float,
     max_images: Optional[int],
+    *,
+    sam_conf: Optional[float] = None,
+    sam_box_batch: Optional[int] = None,
 ) -> dict:
     import cv2
     from tqdm import tqdm
@@ -215,10 +342,13 @@ def process_split(
         images = images[:max_images]
 
     stats: Counter = Counter()
+    recovery: Counter = Counter({key: 0 for key in RECOVERY_KEYS})
     ious: list[float] = []
+    flagged: list[str] = []
     for img_path in tqdm(images, desc=f"SAM {split}"):
         box_lines = (box_dir / f"{img_path.stem}.txt").read_text(encoding="utf-8").splitlines()
         lines: list[str] = []
+        before = {key: recovery[key] for key in RECOVERY_KEYS if key != "sam_calls"}
         if any(line.strip() for line in box_lines):
             image = cv2.imread(str(img_path))
             if image is None:
@@ -226,7 +356,7 @@ def process_split(
             h, w = image.shape[:2]
             lines = convert_label_lines(
                 box_lines,
-                lambda xyxy: sam(image, xyxy),
+                lambda xyxy: sam(image, xyxy, recovery),
                 w,
                 h,
                 fallback_iou,
@@ -237,12 +367,23 @@ def process_split(
             "\n".join(lines) + ("\n" if lines else ""), encoding="utf-8"
         )
         stats["images"] += 1
+        if any(recovery[key] != value for key, value in before.items()):
+            flagged.append(img_path.name)
 
     return {
         "images": stats.pop("images", 0),
         "max_images": max_images,
+        "sam_conf": sam_conf,
+        "sam_box_batch": sam_box_batch,
         "per_class": dict(stats),
         "iou": summarize_ious(ious, fallback_iou),
+        "sam_recovery": {key: recovery[key] for key in RECOVERY_KEYS},
+        # Anh co lech so mask / OOM (bat ky so dem nao ngoai sam_calls tang).
+        "flagged_images": {
+            "count": len(flagged),
+            "names": flagged[:MAX_FLAGGED_IMAGE_NAMES],
+            "truncated": len(flagged) > MAX_FLAGGED_IMAGE_NAMES,
+        },
     }
 
 
@@ -264,6 +405,10 @@ def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
     parser.add_argument("--splits", nargs="+", default=["train", "val", "test"])
     parser.add_argument("--sam-model", default=None, help="Ghi de masks.sam_model")
     parser.add_argument("--fallback-iou", type=float, default=None)
+    parser.add_argument("--sam-conf", type=float, default=None, help="Ghi de masks.sam_conf")
+    parser.add_argument(
+        "--sam-box-batch", type=int, default=None, help="Ghi de masks.sam_box_batch (so box moi lan goi SAM)"
+    )
     parser.add_argument("--device", default=None, help='vd "0" hoac "cpu"')
     parser.add_argument("--weights-dir", type=Path, default=REPO_ROOT / "weights")
     parser.add_argument(
@@ -288,14 +433,24 @@ def main(argv: Optional[list[str]] = None) -> int:
         if not (dataset_dir / "images" / split).is_dir():
             raise FileNotFoundError(f"Khong thay {dataset_dir / 'images' / split}")
 
-    sam = load_sam(sam_model, args.weights_dir, args.device)
+    sam_conf = args.sam_conf if args.sam_conf is not None else float(mask_cfg.get("sam_conf", 0.0))
+    sam_box_batch = (
+        args.sam_box_batch if args.sam_box_batch is not None else int(mask_cfg.get("sam_box_batch", 32))
+    )
+    if sam_box_batch < 1:
+        raise ValueError(f"sam_box_batch phai >= 1, nhan {sam_box_batch}")
+
+    sam = load_sam(sam_model, args.weights_dir, args.device, sam_conf, sam_box_batch)
 
     report = {"sam_model": sam_model, "fallback_iou": fallback_iou, "splits": {}}
     for split in args.splits:
         report["splits"][split] = process_split(
-            dataset_dir, split, sam, fallback_iou, args.max_images
+            dataset_dir, split, sam, fallback_iou, args.max_images,
+            sam_conf=sam_conf, sam_box_batch=sam_box_batch,
         )
-        print(f"[{split}] {report['splits'][split]['iou']}")
+        print(f"[{split}] iou={report['splits'][split]['iou']}")
+        print(f"[{split}] sam_recovery={report['splits'][split]['sam_recovery']} "
+              f"flagged_images={report['splits'][split]['flagged_images']['count']}")
 
     # Ghi them vao manifest cua prepare_visdrone.py (neu co).
     manifest_path = dataset_dir / "manifest.json"

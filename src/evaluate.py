@@ -2,6 +2,9 @@
 
 Trang thai file: KHUNG (scaffold).
     - `iou()` va cac dataclass metric: DA implement.
+    - `load_pipeline_settings()` / `ablation_mismatches()`: DA implement - kiem
+      tra hai lan chay co/khong Motion Memory dung cung weights/source/tracker/
+      conf/imgsz/classes (doc tu run_context.json cua scripts/run_pipeline.py).
     - Cac ham tinh metric: CHUA implement - can chot dinh dang ground truth
       truoc (roadmap buoc 4 sinh kich ban occlusion co ground truth).
 
@@ -17,8 +20,10 @@ Nguyen tac bat buoc khi bao cao:
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field
-from typing import Optional, Sequence
+from pathlib import Path
+from typing import Any, Mapping, Optional, Sequence
 
 from src.motion_memory import BBox
 
@@ -130,3 +135,44 @@ def compute_occlusion_metrics(
     CHUA IMPLEMENT - can chot dinh dang ground truth truoc (roadmap buoc 4).
     """
     raise NotImplementedError("Chua chot dinh dang ground truth - roadmap buoc 4.")
+
+
+# ---------------- dieu kien so sanh cong bang (ablation, CLAUDE.md muc 12) ----------------
+
+# Tham so phai GIONG NHAU giua lan chay co va khong Motion Memory.
+ABLATION_MUST_MATCH = ("weights", "source", "tracker", "conf", "imgsz", "classes")
+
+
+def load_pipeline_settings(exp_dir: Path) -> dict[str, Any]:
+    """Doc tham so inference cua mot lan chay run_pipeline.py tu run_context.json.
+
+    imgsz uu tien `inference.imgsz` (gia tri thuc te da dung); run cu khong co
+    truong nay thi lay `config.imgsz`.
+    """
+    context = json.loads((Path(exp_dir) / "run_context.json").read_text(encoding="utf-8"))
+    config = context.get("config") or {}
+    settings: dict[str, Any] = {key: config.get(key) for key in ABLATION_MUST_MATCH}
+    inference = context.get("inference") or {}
+    if inference.get("imgsz") is not None:
+        settings["imgsz"] = inference["imgsz"]
+    settings["motion_memory"] = config.get("motion_memory")
+    settings["experiment_id"] = context.get("experiment_id")
+    return settings
+
+
+def ablation_mismatches(
+    baseline: Mapping[str, Any], with_memory: Mapping[str, Any]
+) -> list[str]:
+    """Danh sach ly do hai lan chay KHONG so sanh cong bang duoc; rong = OK."""
+    problems: list[str] = []
+    for key in ABLATION_MUST_MATCH:
+        if baseline.get(key) != with_memory.get(key):
+            problems.append(f"{key} khac nhau: {baseline.get(key)!r} vs {with_memory.get(key)!r}")
+    if baseline.get("imgsz") is None or with_memory.get("imgsz") is None:
+        problems.append("thieu imgsz trong run_context (lan chay cu?) - khong xac nhan duoc")
+    if baseline.get("motion_memory") or not with_memory.get("motion_memory"):
+        problems.append(
+            "can baseline motion_memory=False va lan chay kia motion_memory=True, dang la "
+            f"{baseline.get('motion_memory')!r} / {with_memory.get('motion_memory')!r}"
+        )
+    return problems

@@ -98,7 +98,7 @@ def test_process_split_moves_box_labels_and_is_rerunnable(tmp_path: Path):
     (tmp_path / "labels" / "val" / "b.txt").write_text("", encoding="utf-8")
     (tmp_path / "labels" / "val.cache").write_text("stale", encoding="utf-8")
 
-    def fake_sam(image, xyxy_px):
+    def fake_sam(image, xyxy_px, stats):
         assert image.shape[:2] == (20, 40)
         return [None] * len(xyxy_px)
 
@@ -112,3 +112,194 @@ def test_process_split_moves_box_labels_and_is_rerunnable(tmp_path: Path):
     assert seg[0] == "1" and len(seg) == 1 + 8  # hinh chu nhat 4 dinh
     assert (tmp_path / "labels" / "val" / "b.txt").read_text() == ""
     assert not (tmp_path / "labels" / "val.cache").exists()
+
+
+# ---------------- segment_in_batches (SAM gia) ----------------
+
+from scripts.generate_masks import RECOVERY_KEYS, is_oom_error, segment_in_batches  # noqa: E402
+
+
+class FakeOOM(RuntimeError):
+    pass
+
+
+FakeOOM.__name__ = "OutOfMemoryError"
+
+
+def _boxes(n: int) -> np.ndarray:
+    """Box i co x1 = i -> polygon gia mang chi so box de kiem tra ghep dung."""
+    return np.array([[i, 0, i + 1, 1] for i in range(n)], dtype=float)
+
+
+def _poly(box: np.ndarray) -> np.ndarray:
+    return np.full((4, 2), box[0])
+
+
+def _box_id(poly) -> int:
+    return int(poly[0, 0])
+
+
+def _stats(**expected) -> dict:
+    return {k: expected.get(k, 0) for k in RECOVERY_KEYS}
+
+
+def test_batches_respect_batch_size_and_order():
+    calls = []
+
+    def call(chunk):
+        calls.append(len(chunk))
+        return [_poly(b) for b in chunk], list(range(len(chunk)))
+
+    stats: Counter = Counter()
+    out = segment_in_batches(_boxes(10), call, 4, stats)
+    assert calls == [4, 4, 2]
+    assert [_box_id(p) for p in out] == list(range(10))
+    assert {k: stats[k] for k in RECOVERY_KEYS} == _stats(sam_calls=3)
+
+
+def test_missing_mask_is_retried_per_box_then_rectangle():
+    """SAM bo mask cua box 3 (score thap) ca khi goi rieng -> None (hinh chu nhat)."""
+    def call(chunk):
+        keep = [j for j, b in enumerate(chunk) if int(b[0]) != 3]
+        return [_poly(chunk[j]) for j in keep], keep
+
+    stats: Counter = Counter()
+    out = segment_in_batches(_boxes(5), call, 5, stats)
+    assert [None if p is None else _box_id(p) for p in out] == [0, 1, 2, None, 4]
+    assert {k: stats[k] for k in RECOVERY_KEYS} == _stats(
+        sam_calls=2, count_mismatch_calls=2, retried_single_boxes=1, rect_missing_mask=1
+    )
+
+
+def test_missing_mask_recovered_on_single_retry():
+    """Thieu mask khi goi ca nhom, goi rieng thi co."""
+    def call(chunk):
+        if len(chunk) > 1:
+            return [_poly(b) for b in chunk[1:]], list(range(1, len(chunk)))
+        return [_poly(chunk[0])], [0]
+
+    stats: Counter = Counter()
+    out = segment_in_batches(_boxes(3), call, 3, stats)
+    assert [_box_id(p) for p in out] == [0, 1, 2]
+    assert stats["retried_single_boxes"] == 1 and stats["rect_missing_mask"] == 0
+
+
+def test_out_of_order_masks_are_matched_by_index():
+    def call(chunk):
+        order = list(reversed(range(len(chunk))))
+        return [_poly(chunk[j]) for j in order], order
+
+    stats: Counter = Counter()
+    out = segment_in_batches(_boxes(6), call, 6, stats)
+    assert [_box_id(p) for p in out] == list(range(6))
+    assert stats["count_mismatch_calls"] == 0
+
+
+def test_oom_on_large_batch_then_succeeds_when_split():
+    calls, freed = [], []
+
+    def call(chunk):
+        calls.append(len(chunk))
+        if len(chunk) > 2:
+            raise FakeOOM("CUDA out of memory. Tried to allocate 2.00 GiB")
+        return [_poly(b) for b in chunk], list(range(len(chunk)))
+
+    stats: Counter = Counter()
+    out = segment_in_batches(_boxes(8), call, 8, stats, on_oom=lambda: freed.append(1))
+    assert [_box_id(p) for p in out] == list(range(8))
+    assert calls == [8, 4, 2, 2, 4, 2, 2]
+    assert len(freed) == 3
+    assert {k: stats[k] for k in RECOVERY_KEYS} == _stats(sam_calls=4, oom_retries=3)
+
+
+def test_oom_even_for_single_box_gives_rectangle():
+    def call(chunk):
+        if any(int(b[0]) == 1 for b in chunk):
+            raise FakeOOM("CUDA out of memory")
+        return [_poly(b) for b in chunk], list(range(len(chunk)))
+
+    stats: Counter = Counter()
+    out = segment_in_batches(_boxes(4), call, 4, stats)
+    assert [None if p is None else _box_id(p) for p in out] == [0, None, 2, 3]
+    assert stats["rect_oom"] == 1 and stats["rect_missing_mask"] == 0
+    assert stats["oom_retries"] == 2  # 4 -> 2 -> 1
+
+
+def test_non_oom_error_is_raised():
+    def call(chunk):
+        raise ValueError("loi khac")
+
+    with pytest.raises(ValueError):
+        segment_in_batches(_boxes(2), call, 2, Counter())
+
+
+def test_is_oom_error_and_invalid_batch_size():
+    assert is_oom_error(FakeOOM("x"))
+    assert is_oom_error(RuntimeError("CUDA out of memory. Tried to allocate"))
+    assert not is_oom_error(RuntimeError("other"))
+    with pytest.raises(ValueError):
+        segment_in_batches(_boxes(1), lambda c: ([], []), 0, Counter())
+
+
+def test_process_split_records_recovery_in_report(tmp_path: Path):
+    """SAM gia bo mask cua box thu 2 o anh a.jpg -> report dem phuc hoi + ten anh."""
+    import cv2
+
+    (tmp_path / "images" / "train").mkdir(parents=True)
+    (tmp_path / "labels" / "train").mkdir(parents=True)
+    for name in ("a", "b"):
+        cv2.imwrite(str(tmp_path / "images" / "train" / f"{name}.jpg"), np.zeros((20, 40, 3), np.uint8))
+    (tmp_path / "labels" / "train" / "a.txt").write_text(
+        "0 0.3 0.5 0.2 0.4\n1 0.7 0.5 0.2 0.4\n", encoding="utf-8"
+    )
+    (tmp_path / "labels" / "train" / "b.txt").write_text("0 0.5 0.5 0.2 0.4\n", encoding="utf-8")
+
+    def rect(box):
+        x1, y1, x2, y2 = box / [40, 20, 40, 20]
+        return np.array([[x1, y1], [x2, y1], [x2, y2], [x1, y2]])
+
+    def call(chunk):
+        keep = [j for j, b in enumerate(chunk) if b[0] < 20]  # bo box ben phai
+        return [rect(chunk[j]) for j in keep], keep
+
+    def fake_sam(image, xyxy_px, stats):
+        return segment_in_batches(xyxy_px, call, 8, stats)
+
+    report = process_split(tmp_path, "train", fake_sam, 0.5, None, sam_conf=0.0, sam_box_batch=8)
+    assert report["sam_conf"] == 0.0 and report["sam_box_batch"] == 8
+    assert report["sam_recovery"] == {
+        "sam_calls": 3, "count_mismatch_calls": 2, "retried_single_boxes": 1,
+        "rect_missing_mask": 1, "oom_retries": 0, "rect_oom": 0,
+    }
+    assert report["flagged_images"] == {"count": 1, "names": ["a.jpg"], "truncated": False}
+    # Box bi mat mask van co nhan (hinh chu nhat), khong bi bo
+    assert len((tmp_path / "labels" / "train" / "a.txt").read_text().splitlines()) == 2
+
+
+def test_main_writes_sam_settings_to_manifest(tmp_path: Path, monkeypatch):
+    import json
+
+    import cv2
+
+    import scripts.generate_masks as gm
+
+    (tmp_path / "images" / "val").mkdir(parents=True)
+    (tmp_path / "labels" / "val").mkdir(parents=True)
+    cv2.imwrite(str(tmp_path / "images" / "val" / "a.jpg"), np.zeros((20, 40, 3), np.uint8))
+    (tmp_path / "labels" / "val" / "a.txt").write_text("0 0.5 0.5 0.2 0.4\n", encoding="utf-8")
+
+    seen = {}
+
+    def fake_load_sam(model, weights_dir, device, conf, box_batch):
+        seen.update(conf=conf, box_batch=box_batch)
+        return lambda image, xyxy, stats: [None] * len(xyxy)
+
+    monkeypatch.setattr(gm, "load_sam", fake_load_sam)
+    assert gm.main(["--dataset-dir", str(tmp_path), "--splits", "val", "--sam-box-batch", "4"]) == 0
+    split = json.loads((tmp_path / "manifest.json").read_text())["masks"]["splits"]["val"]
+    assert seen == {"conf": 0.0, "box_batch": 4}  # sam_conf tu config repo, batch tu CLI
+    assert split["sam_conf"] == 0.0 and split["sam_box_batch"] == 4
+    assert set(split["sam_recovery"]) == set(gm.RECOVERY_KEYS)
+
+    with pytest.raises(ValueError):
+        gm.main(["--dataset-dir", str(tmp_path), "--splits", "val", "--sam-box-batch", "0"])
