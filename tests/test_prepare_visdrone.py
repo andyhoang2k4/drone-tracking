@@ -146,6 +146,7 @@ def test_main_end_to_end(tmp_path: Path):
 
     manifest = json.loads((out / "manifest.json").read_text(encoding="utf-8"))
     assert manifest["splits"]["train"]["frames_kept"] == 2
+    assert manifest["max_sequences"] is None  # chay du -> null
     assert manifest["splits"]["train"]["box_stats"]["skipped_unmapped_category"] == 1
     assert "names" in dataset_yaml.read_text(encoding="utf-8")
 
@@ -153,6 +154,21 @@ def test_main_end_to_end(tmp_path: Path):
     with pytest.raises(FileExistsError):
         main(argv)
     assert main(argv + ["--overwrite"]) == 0
+
+
+def test_main_smoke_run_records_max_sequences(tmp_path: Path):
+    src = tmp_path / "raw"
+    out = tmp_path / "labeled"
+    _write_fake_visdrone(src)
+    assert main([
+        "--source-root", str(src),
+        "--output-dir", str(out),
+        "--dataset-yaml", str(tmp_path / "dataset.yaml"),
+        "--link-mode", "copy",
+        "--max-sequences", "1",
+    ]) == 0
+    manifest = json.loads((out / "manifest.json").read_text(encoding="utf-8"))
+    assert manifest["max_sequences"] == 1
 
 
 def test_main_refuses_to_delete_foreign_dir(tmp_path: Path):
