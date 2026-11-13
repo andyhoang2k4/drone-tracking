@@ -34,11 +34,21 @@ dataset, version ultralytics/torch, hardware).
 
 ## Ablation bat buoc khi danh gia Motion Memory
 
-So sanh tren CUNG detector + tracker (CLAUDE.md muc 12):
+So sanh tren CUNG detector + tracker (CLAUDE.md muc 12). Tren kich ban
+occlusion, `scripts/run_occlusion_ablation.py` dat ten theo quy uoc:
 
 | Cau hinh | Experiment ID |
 |---|---|
-| YOLO11 + BoT-SORT | |
-| YOLO11 + BoT-SORT + Motion Memory | |
-| YOLO26 + BoT-SORT | |
-| YOLO26 + BoT-SORT + Motion Memory | |
+| YOLO11 + BoT-SORT | `yolo11_botsort_occl_<nhom>_<tag>` |
+| YOLO11 + BoT-SORT + Motion Memory | `yolo11_botsort_mm_occl_<nhom>_<tag>` |
+| YOLO26 + BoT-SORT | `yolo26_botsort_occl_<nhom>_<tag>` |
+| YOLO26 + BoT-SORT + Motion Memory | `yolo26_botsort_mm_occl_<nhom>_<tag>` |
+
+Moi experiment: `config.yaml` + `metrics.json` (gop, commit),
+`scenarios/<kich ban>/{run_context.json, target_selection.json, metrics.json}`
+(commit duoc) va `scenarios/<kich ban>/logs/` (gitignore). So sanh co/khong
+Motion Memory: `<..._mm_...>/ablation_vs_<baseline>.json`.
+
+Nhom `dev` dung de tinh chinh tham so Motion Memory; nhom `heldout` chi chay
+MOT lan sau khi da chot tham so (doi tham so sau khi xem heldout -> tag moi va
+ghi ro trong README cua experiment).

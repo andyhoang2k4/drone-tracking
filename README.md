@@ -32,7 +32,10 @@ khong sua ma nguon noi bo cua `ultralytics`.
 | `configs/botsort.yaml` | Config BoT-SORT rieng cua project (Re-ID mac dinh TAT) |
 | `configs/train_config.yaml` | Config train dung chung cho YOLO11-seg va YOLO26-seg; `inference.conf` dung chung khi inference/danh gia |
 | `configs/motion_memory.yaml` | Tham so Motion Memory (gia tri khoi dau chua tinh chinh; CLI > file > mac dinh dataclass) |
-| `configs/eval_visdrone.yaml` | Danh gia VisDrone2019-MOT (val/test-dev): nguong IoU/IoA, class-aware, warmup FPS |
+| `configs/eval_visdrone.yaml` | Danh gia VisDrone2019-MOT (val/test-dev): nguong IoU/IoA, class-aware, warmup FPS; chon muc tieu theo GT |
+| `configs/occlusion_scenarios.yaml` | Kich ban occlusion nhan tao: seed, quy tac chon muc tieu, thoi luong, kieu che, nhom dev/heldout (co dinh truoc khi chay) |
+| `configs/occlusion_metrics.yaml` | Dinh nghia + nguong do do occlusion (co dinh truoc khi chay) |
+| `src/occlusion_scenarios.py` | Sinh kich ban occlusion co GT moi frame |
 | `src/detect.py` | Chay detection, log JSONL |
 | `src/track.py` | Chay detection + BoT-SORT, log JSONL |
 | `src/motion_memory.py` | Motion memory / temporal propagation |
@@ -40,6 +43,8 @@ khong sua ma nguon noi bo cua `ultralytics`.
 | `src/utils/` | Logger JSONL, thu thap metadata tai hien experiment, resolve tham so inference/Motion Memory |
 | `scripts/train_yolo11.sh`, `train_yolo26.sh` | Train - **chi chay tren Ubuntu/cloud** |
 | `scripts/run_pipeline.py` | Pipeline day du, co co `--motion-memory` cho ablation |
+| `scripts/generate_occlusion_scenarios.py` | Sinh kich ban occlusion cho mot nhom (dev/heldout) |
+| `scripts/run_occlusion_ablation.py` | Chay ablation co/khong Motion Memory tren mot nhom kich ban, roi danh gia/gop/so sanh |
 | `scripts/prepare_visdrone.py` | Chuyen VisDrone2019-MOT sang dinh dang Ultralytics (giai doan A, 10 class) |
 | `scripts/generate_masks.py` | Sinh mask polygon tu box bang SAM, fallback hinh chu nhat khi mask lech |
 | `scripts/check_env.py` | Kiem tra Python, version package, CUDA, schema BoT-SORT, weight |
@@ -125,6 +130,18 @@ python scripts/run_pipeline.py ... --motion-memory \
 # Log moi frame (khi bat): state (null truoc khi thay muc tieu), predicted_bbox,
 # motion_confidence (RIENG, khong gop voi detector_confidence), track_id (doi
 # khi khop lai bang ID moi), recover_reason, gate_candidates_passed.
+# Chon muc tieu theo ground truth thay vi --target-track-id:
+#   --gt-target-id <id> --gt-annotation <annotation VisDrone .txt> [--gt-first-frame 1]
+# (ghep GT voi track BoT-SORT bang IoU o frame dau muc tieu xuat hien; ket qua
+# ghi experiments/<id>/target_selection.json).
+
+# Ablation tren kich ban occlusion (roadmap buoc 4-6), chay tren cloud:
+python scripts/generate_occlusion_scenarios.py --group dev
+python scripts/run_occlusion_ablation.py --group dev --tag 001 \
+    --detector yolo11=<yolo11 best.pt> --detector yolo26=<yolo26 best.pt> --device 0
+# -> experiments/<detector>_botsort[_mm]_occl_dev_001/{config.yaml,metrics.json}
+#    + experiments/<detector>_botsort_mm_occl_dev_001/ablation_vs_<baseline>.json
+# Nhom heldout CHI chay sau khi da chot tham so Motion Memory tren dev.
 
 # imgsz: --imgsz > detector.imgsz trong experiments/<id>/config.yaml >
 # run_context.json canh weights > configs/train_config.yaml. Gia tri da dung
