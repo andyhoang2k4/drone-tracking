@@ -271,3 +271,53 @@ def test_broken_tracks_log_reported_not_deleted(env, capsys):
     out = capsys.readouterr().out
     assert "log track cu khong hop le" in out
     assert "yolo11_botsort_occl_dev_001" not in out.split("Da gop:")[1].split("\n")[0]
+
+
+def test_dry_run_prints_counts(env, capsys):
+    _, base = env
+    assert abl.main(base + ["--dry-run"], FakeRunner()) == 0
+    out = capsys.readouterr().out
+    n = len(CASES)
+    assert f"Nhom dev: {n}/{n} kich ban, 2 detector" in out
+    assert (f"src.track {2 * n}, run_pipeline {4 * n}, evaluate occlusion {4 * n}, "
+            f"evaluate aggregate 4, evaluate compare 2 (tong {2 * n + 8 * n + 6} lenh)") in out
+    assert "bo qua vi da co metrics: 0" in out
+
+
+def test_dry_run_counts_reflect_existing_results(env, capsys):
+    _, base = env
+    assert abl.main(base, FakeRunner()) == 0
+    capsys.readouterr()
+    assert abl.main(base + ["--dry-run"], FakeRunner()) == 0
+    out = capsys.readouterr().out
+    assert "src.track 0, run_pipeline 0, evaluate occlusion 0" in out
+    assert f"bo qua vi da co metrics: {4 * len(CASES)}" in out
+
+
+def test_limit_scenarios_runs_first_n_marked_incomplete(env, capsys):
+    tmp, base = env
+    args = [a.replace("001", "smoke") for a in base] + ["--limit-scenarios", "1"]
+    runner = FakeRunner()
+    assert abl.main(args, runner) == 0
+    assert runner.count("track") == 2 and runner.count("pipeline") == 4
+    out = capsys.readouterr().out
+    assert "Thoi gian (giay):" in out and "Uoc tinh ca nhom (3 kich ban x 2 detector)" in out
+    assert "KHONG phai benchmark" in out
+    exp = tmp / "experiments" / "yolo11_botsort_mm_occl_dev_smoke"
+    agg = json.loads((exp / "metrics.json").read_text())
+    assert agg["completeness"]["complete"] is False and agg["overall"]["scenarios"] == 1
+    assert agg["completeness"]["missing"] == [f"seqA__t{GT_ID}__d005__{c}" for c in CASES[1:]]
+    import yaml
+    assert yaml.safe_load((exp / "config.yaml").read_text())["scenarios"]["limit_scenarios"] == 1
+
+
+def test_limit_scenarios_not_mixed_with_full_run(env):
+    _, base = env
+    assert abl.main(base + ["--limit-scenarios", "1"], FakeRunner()) == 0
+    with pytest.raises(ValueError, match="cau hinh khac"):
+        abl.main(base, FakeRunner())
+
+
+def test_limit_scenarios_must_be_positive():
+    with pytest.raises(SystemExit):
+        abl.parse_args(["--group", "dev", "--tag", "1", "--detector", "a=x", "--limit-scenarios", "0"])

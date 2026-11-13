@@ -24,9 +24,15 @@ Ten experiment (CLAUDE.md muc 14)::
                                         metrics.json, logs/
 
 Khong ghi de: kich ban da co metrics.json bi bo qua; log track hop le duoc dung
-lai. Log (track hoac pipeline) co ma hong/chua du (lan chay bi ngat) -> bao de
+lai. Log (track hoac pipeline) hong/chua du (lan chay bi ngat) -> bao de
 xu ly tay (KHONG xoa, KHONG chay lai len log cu vi log duoc ghi noi). Log
 pipeline day du nhung chua co metrics -> chi danh gia lai.
+
+--dry-run: in lenh, so kich ban va so lan goi du kien theo loai, khong chay gi.
+--limit-scenarios N: chi lay N kich ban dau cua index (do thoi gian / smoke
+test). Ket qua bi danh dau trong config.yaml (khong tron voi lan chay du) va
+`aggregate` chay voi --allow-incomplete (complete=false) -> KHONG phai benchmark.
+Cuoi moi lan chay in thoi gian tung loai lenh va uoc tinh cho ca nhom.
 
 Vi du (tren cloud)::
 
@@ -41,6 +47,7 @@ import argparse
 import json
 import subprocess
 import sys
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Optional
@@ -86,6 +93,38 @@ class Report:
     aggregated: list[str] = field(default_factory=list)
     compared: list[str] = field(default_factory=list)
     commands: list[list[str]] = field(default_factory=list)
+    timings: dict[str, list[float]] = field(default_factory=dict)
+    scenarios_total: int = 0
+    scenarios_selected: int = 0
+
+
+# Thu tu in cac loai lenh.
+COMMAND_KINDS = ("track", "pipeline", "occlusion", "aggregate", "compare")
+KIND_LABELS = {
+    "track": "src.track",
+    "pipeline": "run_pipeline",
+    "occlusion": "evaluate occlusion",
+    "aggregate": "evaluate aggregate",
+    "compare": "evaluate compare",
+}
+
+
+def command_kind(cmd: list[str]) -> str:
+    if cmd[1:3] == ["-m", "src.track"]:
+        return "track"
+    if cmd[1].endswith("run_pipeline.py"):
+        return "pipeline"
+    if cmd[1:3] == ["-m", "src.evaluate"] and len(cmd) > 3:
+        return cmd[3]
+    return "other"
+
+
+def count_kinds(commands: list[list[str]]) -> dict[str, int]:
+    counts = {k: 0 for k in COMMAND_KINDS}
+    for cmd in commands:
+        kind = command_kind(cmd)
+        counts[kind] = counts.get(kind, 0) + 1
+    return counts
 
 
 def parse_detector(value: str) -> tuple[str, str]:
@@ -107,11 +146,16 @@ def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
     parser.add_argument("--device", default=None)
     parser.add_argument("--allow-partial-index", action="store_true",
                         help="Cho phep index danh dau partial (smoke test, KHONG phai benchmark)")
-    parser.add_argument("--dry-run", action="store_true", help="Chi in lenh, khong chay, khong ghi file")
+    parser.add_argument("--limit-scenarios", type=int, default=None, metavar="N",
+                        help="Chi chay N kich ban dau cua index (do thoi gian; KHONG phai benchmark)")
+    parser.add_argument("--dry-run", action="store_true",
+                        help="Chi in lenh + so kich ban/so lan goi du kien, khong chay, khong ghi file")
     args = parser.parse_args(argv)
     names = [n for n, _ in args.detector]
     if len(set(names)) != len(names):
         parser.error("ten detector bi trung")
+    if args.limit_scenarios is not None and args.limit_scenarios < 1:
+        parser.error("--limit-scenarios phai >= 1")
     return args
 
 
@@ -137,6 +181,8 @@ def _scenarios_config(args: argparse.Namespace, index_path: Path, index: dict) -
         "seed": index.get("seed"),
         "count": len(index["scenarios"]),
         "partial": bool(index.get("partial")),
+        # Khac None -> chi N kich ban dau (do thoi gian), khong phai benchmark.
+        "limit_scenarios": args.limit_scenarios,
     }
 
 
@@ -250,12 +296,22 @@ def run_ablation(args: argparse.Namespace, runner: Runner = default_runner) -> R
     group_dir = args.scenario_root / args.group
     report = Report()
 
+    scenarios = list(index["scenarios"])
+    report.scenarios_total = len(scenarios)
+    if args.limit_scenarios is not None:
+        scenarios = scenarios[: args.limit_scenarios]
+    report.scenarios_selected = len(scenarios)
+    incomplete_ok = args.allow_partial_index or args.limit_scenarios is not None
+
     def call(cmd: list[str]) -> int:
         report.commands.append(cmd)
         if args.dry_run:
             print(" ".join(cmd))
             return 0
-        return runner(cmd)
+        start = time.perf_counter()
+        code = runner(cmd)
+        report.timings.setdefault(command_kind(cmd), []).append(time.perf_counter() - start)
+        return code
 
     detectors: list[tuple[str, str, Path, list[RunSpec]]] = []
     for name, weights in args.detector:
@@ -273,7 +329,7 @@ def run_ablation(args: argparse.Namespace, runner: Runner = default_runner) -> R
 
     for name, weights, tracks_dir, specs in detectors:
         complete = {spec.exp_id: True for spec in specs}
-        for scen_name in index["scenarios"]:
+        for scen_name in scenarios:
             scen_dir = group_dir / scen_name
             manifest = json.loads((scen_dir / "manifest.json").read_text(encoding="utf-8"))
             pending = [
@@ -343,7 +399,7 @@ def run_ablation(args: argparse.Namespace, runner: Runner = default_runner) -> R
                 continue
             cmd = [sys.executable, "-m", "src.evaluate", "aggregate",
                    "--exp-dir", str(spec.exp_dir), "--index", str(index_path)]
-            if args.allow_partial_index:
+            if incomplete_ok:
                 cmd.append("--allow-incomplete")
             if call(cmd) == 0:
                 report.aggregated.append(spec.exp_id)
@@ -363,11 +419,41 @@ def run_ablation(args: argparse.Namespace, runner: Runner = default_runner) -> R
     return report
 
 
+def print_plan(report: Report, args: argparse.Namespace) -> None:
+    limit = f" (--limit-scenarios {args.limit_scenarios})" if args.limit_scenarios else ""
+    print(f"[dry-run] Nhom {args.group}: {report.scenarios_selected}/{report.scenarios_total} "
+          f"kich ban{limit}, {len(args.detector)} detector")
+    counts = count_kinds(report.commands)
+    parts = ", ".join(f"{KIND_LABELS.get(k, k)} {counts[k]}" for k in counts)
+    print(f"[dry-run] Du kien: {parts} (tong {len(report.commands)} lenh); "
+          f"bo qua vi da co metrics: {len(report.skipped)} lan chay kich ban")
+    print("[dry-run] Khong chay gi, khong ghi file.")
+
+
+def print_timings(report: Report, args: argparse.Namespace) -> None:
+    if not report.timings:
+        return
+    print("Thoi gian (giay):")
+    for kind in list(COMMAND_KINDS) + sorted(set(report.timings) - set(COMMAND_KINDS)):
+        values = report.timings.get(kind)
+        if values:
+            print(f"  {KIND_LABELS.get(kind, kind)}: {len(values)} lan, tong {sum(values):.1f}, "
+                  f"trung binh {sum(values) / len(values):.2f}")
+    # Uoc tinh: moi cap (detector, kich ban) chay moi = 1 src.track + 2 run_pipeline + 2 evaluate.
+    units = len(report.timings.get("track", []))
+    if units:
+        per_unit = sum(sum(report.timings.get(k, [])) for k in ("track", "pipeline", "occlusion")) / units
+        total_units = report.scenarios_total * len(args.detector)
+        print(f"Uoc tinh ca nhom ({report.scenarios_total} kich ban x {len(args.detector)} detector): "
+              f"~{per_unit * total_units / 60:.1f} phut (dua tren {units} cap detector x kich ban "
+              f"vua chay, {per_unit:.1f} s/cap)")
+
+
 def main(argv: Optional[list[str]] = None, runner: Runner = default_runner) -> int:
     args = parse_args(argv)
     report = run_ablation(args, runner)
     if args.dry_run:
-        print(f"[dry-run] {len(report.commands)} lenh, khong chay gi.")
+        print_plan(report, args)
         return 0
     print(f"Tracker: chay {len(report.tracked)}, dung lai log {len(report.tracks_reused)}")
     print(f"Hau ky: chay moi {len(report.ran)}, bo qua (da co): {len(report.skipped)}, "
@@ -376,6 +462,10 @@ def main(argv: Optional[list[str]] = None, runner: Runner = default_runner) -> i
         print(f"  LOI: {item}")
     print(f"Da gop: {report.aggregated}")
     print(f"Da so sanh: {report.compared}")
+    print_timings(report, args)
+    if args.limit_scenarios is not None:
+        print(f"CHU Y: --limit-scenarios {args.limit_scenarios} -> ket qua gop danh dau incomplete, "
+              "KHONG phai benchmark.")
     return 1 if report.failed else 0
 
 
