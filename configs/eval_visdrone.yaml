@@ -16,3 +16,9 @@ iou_threshold: 0.5            # IoU toi thieu de ghep prediction voi GT
 ignore_ioa: 0.5               # IoA toi thieu voi vung bi bo qua -> loai box
 class_aware: true             # chi ghep khi cung class
 fps_warmup_frames: 10         # bo N frame dau (setup model + warmup) khi tinh FPS
+
+# Chon muc tieu theo ground truth cho `run_pipeline.py --gt-target-id`
+# (src/utils/gt_target.py). GIA TRI KHOI DAU CHUA TINH CHINH; CLI ghi de duoc.
+gt_target_selection:
+  match_iou: 0.5              # IoU toi thieu giua bbox GT va track BoT-SORT
+  max_search_frames: 10       # so frame tim (tinh tu frame GT dau tien) truoc khi bao that bai

@@ -54,7 +54,10 @@ from src.utils.motion_memory_settings import (  # noqa: E402
     DEFAULT_MOTION_MEMORY_CONFIG,
     resolve_motion_memory_config,
 )
+from src.utils.gt_target import GtTargetSelector, load_target_boxes  # noqa: E402
 from src.utils.run_context import build_run_context  # noqa: E402
+
+DEFAULT_EVAL_CONFIG = REPO_ROOT / "configs" / "eval_visdrone.yaml"
 
 
 def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
@@ -66,12 +69,43 @@ def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
         required=True,
         help="Ten thu muc con trong experiments/ (CLAUDE.md muc 14)",
     )
-    parser.add_argument(
+    target = parser.add_mutually_exclusive_group(required=True)
+    target.add_argument(
         "--target-track-id",
         type=int,
-        required=True,
         help="Track ID cua muc tieu can bam theo",
     )
+    target.add_argument(
+        "--gt-target-id",
+        type=int,
+        help="target_id trong ground truth VisDrone; track ID duoc chon tu dong bang "
+        "IoU (src/utils/gt_target.py). Can --gt-annotation",
+    )
+    parser.add_argument(
+        "--gt-annotation",
+        type=Path,
+        default=None,
+        help="File annotation VisDrone-MOT (.txt) chua --gt-target-id",
+    )
+    parser.add_argument(
+        "--gt-first-frame",
+        type=int,
+        default=1,
+        help="So frame VisDrone ung voi frame_idx 0 cua log (anh 0000001.jpg -> 1)",
+    )
+    parser.add_argument(
+        "--gt-match-iou",
+        type=float,
+        default=None,
+        help="Bo trong = gt_target_selection.match_iou trong --eval-config",
+    )
+    parser.add_argument(
+        "--gt-max-search-frames",
+        type=int,
+        default=None,
+        help="Bo trong = gt_target_selection.max_search_frames trong --eval-config",
+    )
+    parser.add_argument("--eval-config", type=Path, default=DEFAULT_EVAL_CONFIG)
     parser.add_argument("--tracker", type=Path, default=DEFAULT_TRACKER_CONFIG)
     parser.add_argument(
         "--conf",
@@ -118,7 +152,44 @@ def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
         default=REPO_ROOT / "experiments",
         help="Thu muc goc chua cac experiment",
     )
-    return parser.parse_args(argv)
+    args = parser.parse_args(argv)
+    if args.gt_target_id is not None and args.gt_annotation is None:
+        parser.error("--gt-target-id can --gt-annotation")
+    return args
+
+
+def build_target_selector(args: argparse.Namespace) -> Optional[GtTargetSelector]:
+    """GtTargetSelector khi dung --gt-target-id; None khi dung --target-track-id."""
+    if args.gt_target_id is None:
+        return None
+    import yaml
+
+    eval_config = yaml.safe_load(Path(args.eval_config).read_text(encoding="utf-8")) or {}
+    selection = eval_config.get("gt_target_selection") or {}
+    dataset_config = Path(eval_config["dataset_config"])
+    if not dataset_config.is_absolute():
+        dataset_config = REPO_ROOT / dataset_config
+    category_map = {
+        int(k): int(v)
+        for k, v in (
+            yaml.safe_load(dataset_config.read_text(encoding="utf-8")).get("category_map") or {}
+        ).items()
+    }
+    match_iou = args.gt_match_iou if args.gt_match_iou is not None else selection.get("match_iou")
+    max_search = (
+        args.gt_max_search_frames
+        if args.gt_max_search_frames is not None
+        else selection.get("max_search_frames")
+    )
+    if match_iou is None or max_search is None:
+        raise ValueError(f"{args.eval_config}: thieu gt_target_selection.match_iou/max_search_frames")
+    return GtTargetSelector(
+        gt_boxes=load_target_boxes(args.gt_annotation, args.gt_target_id, category_map),
+        match_iou=float(match_iou),
+        max_search_frames=int(max_search),
+        first_frame=args.gt_first_frame,
+        gt_target_id=args.gt_target_id,
+    )
 
 
 def record_to_candidates(record: dict[str, Any]) -> list[Observation]:
@@ -154,7 +225,7 @@ class MotionMemoryRunner:
     - Truyen frame_idx that va moi track khac lam ung vien.
     """
 
-    def __init__(self, memory: MotionMemory, initial_target_id: int) -> None:
+    def __init__(self, memory: MotionMemory, initial_target_id: Optional[int]) -> None:
         self.memory = memory
         self.initial_target_id = initial_target_id
         self.started = False
@@ -250,6 +321,8 @@ def main(argv: Optional[list[str]] = None) -> int:
     if conf_choice.conf != conf_choice.config_conf:
         print(f"CANH BAO: conf khac inference.conf={conf_choice.config_conf} trong config")
 
+    selector = build_target_selector(args)
+
     runner: Optional[MotionMemoryRunner] = None
     mm_context: Optional[dict] = None
     if args.motion_memory:
@@ -291,12 +364,21 @@ def main(argv: Optional[list[str]] = None) -> int:
             classes=args.classes,
         ):
             frames += 1
+            target_id = (
+                args.target_track_id if selector is None else selector.offer(record)
+            )
             if runner is not None:
+                if not runner.started:
+                    runner.initial_target_id = target_id
                 log.write(runner.step(record))
                 continue
 
             # Baseline (khong Motion Memory): giu nguyen hanh vi cu.
-            observation = track_record_to_observation(record, args.target_track_id)
+            observation = (
+                track_record_to_observation(record, target_id)
+                if target_id is not None
+                else None
+            )
 
             entry: dict = {
                 "frame_idx": record["frame_idx"],
@@ -315,6 +397,15 @@ def main(argv: Optional[list[str]] = None) -> int:
             )
 
             log.write(entry)
+
+    # Cach chon muc tieu (doc boi danh gia kich ban occlusion).
+    if selector is not None:
+        selector.finish()
+        selection = selector.as_dict()
+        print(f"Chon muc tieu theo GT: {selection['status']}, track {selection['selected_track_id']}")
+    else:
+        selection = {"mode": "cli", "target_track_id": args.target_track_id}
+    write_json(exp_dir / "target_selection.json", selection)
 
     print(f"Da chay {frames} frame. Log: {log_path}")
     print(f"Metadata: {exp_dir / 'run_context.json'}")
