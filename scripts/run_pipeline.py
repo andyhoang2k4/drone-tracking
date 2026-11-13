@@ -17,6 +17,17 @@ Tham so Motion Memory: CLI (--lost-timeout-frames, --reid-timeout-frames) >
 --motion-memory-config (mac dinh configs/motion_memory.yaml) > mac dinh
 MotionMemoryConfig; gia tri da resolve ghi vao run_context.json.
 
+Che do replay (--replay-tracks): KHONG chay YOLO/BoT-SORT, doc track tu log
+cua `python -m src.track` (kem <log>.meta.json). Dung de chay baseline va
+Motion Memory tren CUNG mot dau ra tracker (scripts/run_occlusion_ablation.py)::
+
+    python -m src.track --weights W --source <anh> --output tracks.jsonl
+    python scripts/run_pipeline.py --weights W --source <anh> --replay-tracks tracks.jsonl ...
+    python scripts/run_pipeline.py ... --replay-tracks tracks.jsonl --motion-memory
+
+weights/source/tracker phai khop meta; conf/imgsz/classes lay tu meta (CLI neu
+co thi phai bang meta). SHA-256 cua log ghi vao run_context.json (khoa replay).
+
 Khi KHONG bat --motion-memory, log giu nhu truoc (baseline), chi them truong
 `path` (anh nguon cua frame, de kiem tra thu tu anh). BoT-SORT
 duoc goi giong het o hai che do - Motion Memory chi la post-processing.
@@ -25,9 +36,11 @@ duoc goi giong het o hai che do - Motion Memory chi la post-processing.
 from __future__ import annotations
 
 import argparse
+import hashlib
+import json
 import sys
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Iterator, Optional
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
@@ -148,6 +161,13 @@ def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
         help="Bo trong = lay tu --motion-memory-config",
     )
     parser.add_argument(
+        "--replay-tracks",
+        type=Path,
+        default=None,
+        help="Log track cua `python -m src.track` (can <log>.meta.json canh log); "
+        "doc track tu day thay vi chay YOLO + BoT-SORT",
+    )
+    parser.add_argument(
         "--output-root",
         type=Path,
         default=REPO_ROOT / "experiments",
@@ -190,6 +210,83 @@ def build_target_selector(args: argparse.Namespace) -> Optional[GtTargetSelector
         max_search_frames=int(max_search),
         first_frame=args.gt_first_frame,
         gt_target_id=args.gt_target_id,
+    )
+
+
+class ReplayError(ValueError):
+    """Log track de replay khong hop le hoac khong khop tham so."""
+
+
+# Tham so phai trung voi meta cua log track (so sanh theo Path).
+REPLAY_PATH_KEYS = ("weights", "source", "tracker")
+# Tham so lay tu meta; neu CLI co dien thi phai bang meta.
+REPLAY_VALUE_KEYS = ("conf", "imgsz", "classes")
+
+
+def replay_meta_path(tracks_log: Path) -> Path:
+    """Meta do src.track ghi canh log (write_inference_meta: <log>.meta.json)."""
+    return Path(tracks_log).with_suffix(".meta.json")
+
+
+def load_replay(tracks_log: Path) -> dict[str, Any]:
+    """Doc log track + meta. Bat buoc frame_idx 0..N-1 lien tuc (log ghi noi
+    hoac dang do bi tu choi). Tra ve records, meta, sha256 (byte cua log)."""
+    tracks_log = Path(tracks_log)
+    if not tracks_log.is_file():
+        raise ReplayError(f"Khong thay log track {tracks_log}")
+    meta_path = replay_meta_path(tracks_log)
+    if not meta_path.is_file():
+        raise ReplayError(f"Khong thay {meta_path} (do python -m src.track ghi canh log)")
+    raw = tracks_log.read_bytes()
+    try:
+        records = [json.loads(line) for line in raw.decode("utf-8").splitlines() if line.strip()]
+    except json.JSONDecodeError as exc:
+        raise ReplayError(f"{tracks_log}: dong JSON hong ({exc})") from exc
+    if not records:
+        raise ReplayError(f"{tracks_log}: log rong")
+    if [r.get("frame_idx") for r in records] != list(range(len(records))):
+        raise ReplayError(f"{tracks_log}: frame_idx phai la 0..N-1 lien tuc (log bi ghi noi/thieu?)")
+    return {
+        "records": records,
+        "meta": json.loads(meta_path.read_text(encoding="utf-8")),
+        "sha256": hashlib.sha256(raw).hexdigest(),
+        "path": tracks_log,
+        "meta_path": meta_path,
+    }
+
+
+def apply_replay_meta(args: argparse.Namespace, meta: dict[str, Any]) -> None:
+    """Kiem tra CLI khop meta cua log track, roi lay conf/imgsz/classes/device tu meta."""
+    problems = []
+    for key in REPLAY_PATH_KEYS:
+        if meta.get(key) is None or Path(str(getattr(args, key))) != Path(str(meta[key])):
+            problems.append(f"{key}: CLI {getattr(args, key)!r} khac meta {meta.get(key)!r}")
+    for key in REPLAY_VALUE_KEYS:
+        cli = getattr(args, key)
+        if cli is not None and cli != meta.get(key):
+            problems.append(f"{key}: CLI {cli!r} khac meta {meta.get(key)!r}")
+    if meta.get("imgsz") is None or meta.get("conf") is None:
+        problems.append("meta thieu imgsz/conf")
+    if problems:
+        raise ReplayError("Log track khong khop tham so:\n  " + "\n  ".join(problems))
+    for key in REPLAY_VALUE_KEYS:
+        setattr(args, key, meta.get(key))
+    args.device = meta.get("device")
+
+
+def tracker_records(args: argparse.Namespace, replay: Optional[dict[str, Any]]) -> Iterator[dict[str, Any]]:
+    """Nguon track moi frame: log replay, hoac chay YOLO + BoT-SORT (iter_tracks)."""
+    if replay is not None:
+        yield from replay["records"]
+        return
+    yield from iter_tracks(
+        args.weights,
+        args.source,
+        tracker=args.tracker,
+        conf=args.conf,
+        imgsz=args.imgsz,
+        device=args.device,
+        classes=args.classes,
     )
 
 
@@ -306,23 +403,43 @@ def main(argv: Optional[list[str]] = None) -> int:
     exp_dir = Path(args.output_root) / args.experiment_id
     log_path = exp_dir / "logs" / "pipeline.jsonl"
 
-    # imgsz: CLI > experiment > train_config (src/utils/inference_settings.py).
-    # Ghi vao run_context de so sanh co/khong Motion Memory cung imgsz.
-    choice = resolve_imgsz(
-        args.imgsz,
-        experiment_dir=exp_dir,
-        weights=args.weights,
-        train_config=args.train_config,
-    )
-    args.imgsz = choice.imgsz
-    print(f"imgsz = {choice.imgsz} (nguon: {choice.source})")
-    for warning in choice.warnings:
-        print(f"CANH BAO: {warning}")
-    conf_choice = resolve_conf(args.conf, train_config=args.train_config)
-    args.conf = conf_choice.conf
-    print(f"conf = {conf_choice.conf} (nguon: {conf_choice.source})")
-    if conf_choice.conf != conf_choice.config_conf:
-        print(f"CANH BAO: conf khac inference.conf={conf_choice.config_conf} trong config")
+    replay: Optional[dict[str, Any]] = None
+    replay_context: Optional[dict[str, Any]] = None
+    if args.replay_tracks is not None:
+        # Replay: tham so inference la cua lan chay tracker (meta), khong resolve lai.
+        replay = load_replay(args.replay_tracks)
+        apply_replay_meta(args, replay["meta"])
+        inference = {
+            key: replay["meta"].get(key)
+            for key in ("imgsz", "imgsz_source", "imgsz_warnings", "conf", "conf_source", "config_conf")
+        }
+        replay_context = {
+            "tracks_log": str(replay["path"]),
+            "tracks_sha256": replay["sha256"],
+            "frames": len(replay["records"]),
+            "tracker_meta": replay["meta"],
+        }
+        print(f"Replay {len(replay['records'])} frame tu {replay['path']} "
+              f"(imgsz={args.imgsz}, conf={args.conf})")
+    else:
+        # imgsz: CLI > experiment > train_config (src/utils/inference_settings.py).
+        # Ghi vao run_context de so sanh co/khong Motion Memory cung imgsz.
+        choice = resolve_imgsz(
+            args.imgsz,
+            experiment_dir=exp_dir,
+            weights=args.weights,
+            train_config=args.train_config,
+        )
+        args.imgsz = choice.imgsz
+        print(f"imgsz = {choice.imgsz} (nguon: {choice.source})")
+        for warning in choice.warnings:
+            print(f"CANH BAO: {warning}")
+        conf_choice = resolve_conf(args.conf, train_config=args.train_config)
+        args.conf = conf_choice.conf
+        print(f"conf = {conf_choice.conf} (nguon: {conf_choice.source})")
+        if conf_choice.conf != conf_choice.config_conf:
+            print(f"CANH BAO: conf khac inference.conf={conf_choice.config_conf} trong config")
+        inference = {**choice.as_dict(), **conf_choice.as_dict()}
 
     selector = build_target_selector(args)
 
@@ -348,24 +465,18 @@ def main(argv: Optional[list[str]] = None) -> int:
             dataset=args.source,
             repo_root=REPO_ROOT,
             extra={
-                "inference": {**choice.as_dict(), **conf_choice.as_dict()},
+                "inference": inference,
                 # Gia tri da resolve (CLI > file > dataclass); None khi tat.
                 "motion_memory": mm_context,
+                # Log track da replay (None khi chay YOLO truc tiep).
+                "replay": replay_context,
             },
         ),
     )
 
     frames = 0
     with JsonlLogger(log_path) as log:
-        for record in iter_tracks(
-            args.weights,
-            args.source,
-            tracker=args.tracker,
-            conf=args.conf,
-            imgsz=choice.imgsz,
-            device=args.device,
-            classes=args.classes,
-        ):
+        for record in tracker_records(args, replay):
             frames += 1
             target_id = (
                 args.target_track_id if selector is None else selector.offer(record)

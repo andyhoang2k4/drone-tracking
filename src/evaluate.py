@@ -476,6 +476,8 @@ def load_pipeline_settings(exp_dir: Path) -> dict[str, Any]:
         settings["imgsz"] = inference["imgsz"]
     settings["motion_memory"] = config.get("motion_memory")
     settings["experiment_id"] = context.get("experiment_id")
+    # Che do replay: SHA-256 cua log track da dung (None khi chay YOLO truc tiep).
+    settings["tracks_sha256"] = (context.get("replay") or {}).get("tracks_sha256")
     return settings
 
 
@@ -487,6 +489,11 @@ def ablation_mismatches(
     for key in ABLATION_MUST_MATCH:
         if baseline.get(key) != with_memory.get(key):
             problems.append(f"{key} khac nhau: {baseline.get(key)!r} vs {with_memory.get(key)!r}")
+    if baseline.get("tracks_sha256") != with_memory.get("tracks_sha256"):
+        problems.append(
+            "hai lan chay khong dung cung log track (tracks_sha256 "
+            f"{baseline.get('tracks_sha256')!r} vs {with_memory.get('tracks_sha256')!r})"
+        )
     if baseline.get("imgsz") is None or with_memory.get("imgsz") is None:
         problems.append("thieu imgsz trong run_context (lan chay cu?) - khong xac nhan duoc")
     if baseline.get("motion_memory") or not with_memory.get("motion_memory"):
@@ -893,6 +900,7 @@ def evaluate_occlusion_run(
             **{k: config.get(k) for k in RUN_KEYS},
             "motion_memory_config": (context.get("motion_memory") or {}).get("config"),
             "git_commit": (context.get("git") or {}).get("commit"),
+            "tracks_sha256": (context.get("replay") or {}).get("tracks_sha256"),
         },
         "target_selection": selection,
         "metrics_config": dict(metrics_config),

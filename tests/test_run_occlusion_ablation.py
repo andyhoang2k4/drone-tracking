@@ -1,11 +1,13 @@
 """Test scripts/run_occlusion_ablation.py voi bo chay GIA (khong YOLO, khong subprocess).
 
-Bo chay gia goi run_pipeline.main / src.evaluate.main trong cung tien trinh;
-iter_tracks duoc thay bang track gia theo ten kich ban.
+Bo chay gia goi src.track.main / run_pipeline.main / src.evaluate.main trong
+cung tien trinh; src.track.iter_tracks duoc thay bang track gia theo ten kich
+ban, con run_pipeline.iter_tracks bi cam (replay khong duoc chay YOLO).
 """
 
 from __future__ import annotations
 
+import hashlib
 import json
 import sys
 from pathlib import Path
@@ -19,6 +21,7 @@ if str(REPO_ROOT) not in sys.path:
 import scripts.run_occlusion_ablation as abl  # noqa: E402
 import scripts.run_pipeline as rp  # noqa: E402
 import src.evaluate as ev  # noqa: E402
+import src.track as tr  # noqa: E402
 from src.motion_memory import BBox  # noqa: E402
 
 N, OCC_LO, OCC_HI, GT_ID = 20, 6, 10, 42
@@ -80,6 +83,8 @@ class FakeRunner:
 
     def __call__(self, cmd: list[str]) -> int:
         self.calls.append(cmd)
+        if cmd[1:3] == ["-m", "src.track"]:
+            return tr.main(cmd[3:] + ["--imgsz", "960"])
         if cmd[1].endswith("run_pipeline.py"):
             return rp.main(cmd[2:] + ["--imgsz", "960"])
         if cmd[1:3] == ["-m", "src.evaluate"]:
@@ -90,13 +95,21 @@ class FakeRunner:
         raise AssertionError(cmd)
 
     def count(self, what: str) -> int:
-        return sum(1 for c in self.calls if (c[1].endswith("run_pipeline.py") if what == "pipeline"
-                                              else len(c) > 3 and c[3] == what))
+        if what == "pipeline":
+            return sum(1 for c in self.calls if c[1].endswith("run_pipeline.py"))
+        if what == "track":
+            return sum(1 for c in self.calls if c[1:3] == ["-m", "src.track"])
+        return sum(1 for c in self.calls if len(c) > 3 and c[3] == what)
 
 
 @pytest.fixture
 def env(tmp_path, monkeypatch):
-    monkeypatch.setattr(rp, "iter_tracks", lambda w, s, **k: iter(fake_tracks(s)))
+    monkeypatch.setattr(tr, "iter_tracks", lambda w, s, **k: iter(fake_tracks(s)))
+
+    def no_yolo(*a, **k):
+        raise AssertionError("run_pipeline khong duoc chay YOLO khi replay")
+
+    monkeypatch.setattr(rp, "iter_tracks", no_yolo)
     scen_root = tmp_path / "scn"
     make_group(scen_root)
     base = ["--group", "dev", "--tag", "001", "--scenario-root", str(scen_root),
@@ -117,7 +130,9 @@ def test_dry_run_prints_commands_and_writes_nothing(env, capsys):
     assert runner.calls == []
     assert not (tmp / "experiments").exists()
     out = capsys.readouterr().out
+    assert out.count("-m src.track") == 2 * len(CASES)  # mot lan moi detector x kich ban
     assert out.count("run_pipeline.py") == 2 * 2 * len(CASES)
+    assert out.count("--replay-tracks") == 2 * 2 * len(CASES)
     assert out.count("--motion-memory ") == 2 * len(CASES)
     assert "src.evaluate compare" in out
 
@@ -126,6 +141,7 @@ def test_full_run_then_rerun_skips(env):
     tmp, base = env
     runner = FakeRunner()
     assert abl.main(base, runner) == 0
+    assert runner.count("track") == 2 * len(CASES)
     assert runner.count("pipeline") == 2 * 2 * len(CASES)
     exps = tmp / "experiments"
     for exp in ("yolo11_botsort_occl_dev_001", "yolo11_botsort_mm_occl_dev_001",
@@ -143,6 +159,7 @@ def test_full_run_then_rerun_skips(env):
               / "metrics.json").read_bytes()
     runner2 = FakeRunner()
     assert abl.main(base, runner2) == 0
+    assert runner2.count("track") == 0
     assert runner2.count("pipeline") == 0 and runner2.count("occlusion") == 0
     after = (exps / "yolo11_botsort_occl_dev_001" / "scenarios" / f"seqA__t{GT_ID}__d005__never"
              / "metrics.json").read_bytes()
@@ -157,6 +174,7 @@ def test_interrupted_run_is_reevaluated_not_rerun(env):
     (run_dir / "metrics.json").unlink()
     runner = FakeRunner()
     assert abl.main(base, runner) == 0
+    assert runner.count("track") == 0
     assert runner.count("pipeline") == 0 and runner.count("occlusion") == 1
     assert (run_dir / "metrics.json").is_file()
 
@@ -201,3 +219,55 @@ def test_bad_detector_arg():
         abl.parse_args(["--group", "dev", "--tag", "1", "--detector", "noequals"])
     with pytest.raises(SystemExit):
         abl.parse_args(["--group", "dev", "--tag", "1", "--detector", "a=x", "--detector", "a=y"])
+
+
+def _context(exps: Path, exp: str, scen: str) -> dict:
+    return json.loads((exps / exp / "scenarios" / scen / "run_context.json").read_text())
+
+
+def test_both_configs_replay_exactly_same_tracker_output(env):
+    """Hai cau hinh doc CUNG mot file log track (cung SHA-256), khong chay YOLO."""
+    tmp, base = env
+    assert abl.main(base, FakeRunner()) == 0
+    exps = tmp / "experiments"
+    for det in ("yolo11", "yolo26"):
+        for case in CASES:
+            scen = f"seqA__t{GT_ID}__d005__{case}"
+            log = exps / f"{det}_botsort_tracks_occl_dev_001" / "scenarios" / scen / "logs" / "tracks.jsonl"
+            sha = hashlib.sha256(log.read_bytes()).hexdigest()
+            b = _context(exps, f"{det}_botsort_occl_dev_001", scen)
+            m = _context(exps, f"{det}_botsort_mm_occl_dev_001", scen)
+            assert b["replay"]["tracks_sha256"] == m["replay"]["tracks_sha256"] == sha
+            assert Path(b["replay"]["tracks_log"]) == Path(m["replay"]["tracks_log"]) == log
+            assert b["config"]["motion_memory"] is False and m["config"]["motion_memory"] is True
+
+
+def test_rerun_reuses_tracks_log(env):
+    tmp, base = env
+    assert abl.main(base, FakeRunner()) == 0
+    run_dir = (tmp / "experiments" / "yolo11_botsort_mm_occl_dev_001" / "scenarios"
+               / f"seqA__t{GT_ID}__d005__never")
+    (run_dir / "metrics.json").unlink()
+    (run_dir / "logs" / "pipeline.jsonl").unlink()
+    runner = FakeRunner()
+    assert abl.main(base, runner) == 0
+    assert runner.count("track") == 0 and runner.count("pipeline") == 1
+
+
+def test_broken_tracks_log_reported_not_deleted(env, capsys):
+    tmp, base = env
+    assert abl.main(base, FakeRunner()) == 0
+    scen = f"seqA__t{GT_ID}__d005__same_id"
+    exps = tmp / "experiments"
+    log = exps / "yolo11_botsort_tracks_occl_dev_001" / "scenarios" / scen / "logs" / "tracks.jsonl"
+    log.write_text("\n".join(log.read_text().splitlines()[:5]) + "\n")  # log dang do
+    run_dir = exps / "yolo11_botsort_occl_dev_001" / "scenarios" / scen
+    (run_dir / "metrics.json").unlink()
+    (run_dir / "logs" / "pipeline.jsonl").unlink()
+    capsys.readouterr()
+    runner = FakeRunner()
+    assert abl.main(base, runner) == 1
+    assert log.is_file() and runner.count("track") == 0 and runner.count("pipeline") == 0
+    out = capsys.readouterr().out
+    assert "log track cu khong hop le" in out
+    assert "yolo11_botsort_occl_dev_001" not in out.split("Da gop:")[1].split("\n")[0]
