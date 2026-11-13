@@ -63,6 +63,9 @@ class Observation:
 
     detector_confidence duoc giu RIENG, khong gop vao prediction confidence
     (xem CLAUDE.md muc 6).
+
+    Cung kieu nay dung cho UNG VIEN khop lai (`candidates` cua update()).
+    `cls`: class id cua detector (tuy chon) - dung cho gating cung class.
     """
 
     bbox: BBox
@@ -70,16 +73,22 @@ class Observation:
     timestamp: Optional[float] = None
     track_id: Optional[int] = None
     detector_confidence: Optional[float] = None
+    cls: Optional[int] = None
 
 
 @dataclass(frozen=True)
 class MotionPrediction:
-    """Output cua motion memory - dung interface o CLAUDE.md muc 6."""
+    """Output cua motion memory - dung interface o CLAUDE.md muc 6.
+
+    track_id: ID tracker cua muc tieu dang theo (doi khi khop lai sang ID moi
+    bang gating); None neu chua biet.
+    """
 
     bbox: Optional[BBox]
     confidence: float
     frames_since_confirmed: int
     state: TrackState
+    track_id: Optional[int] = None
 
 
 @dataclass
@@ -111,6 +120,20 @@ class MotionMemoryConfig:
         ((w + h) / 2) moi frame. Toc do nho hon -> coi la dung yen (loc jitter
         cua bbox), khong ngoai suy.
 
+    Gating khop lai trong LOST (ung vien co track ID khac). `scale` =
+    (w + h) / 2 cua bbox confirmed cuoi; `gap` = frame_idx ung vien -
+    frame_idx confirmed cuoi (chenh lech frame THAT, khong theo so lan goi).
+    match_iou:
+        IoU toi thieu voi predicted bbox (tai `gap`) de qua gate.
+    match_center_ratio, match_gate_growth:
+        Hoac khoang cach tam <= scale * match_center_ratio
+        * (1 + match_gate_growth * gap) - gate noi dan theo thoi gian mat.
+    max_scale_change:
+        Ti le dien tich ung vien / bbox cuoi phai trong
+        [1 / max_scale_change, max_scale_change].
+    Ung vien phai cung class (neu muc tieu co class) va CHI chap nhan khi
+    dung mot ung vien qua gate.
+
     Cac gia tri mac dinh la gia tri khoi dau CHUA tinh chinh.
     """
 
@@ -121,6 +144,10 @@ class MotionMemoryConfig:
     min_history: int = 3
     velocity_decay: float = 0.95
     min_speed_ratio: float = 0.02
+    match_iou: float = 0.3
+    match_center_ratio: float = 0.5
+    match_gate_growth: float = 0.1
+    max_scale_change: float = 2.0
 
     def __post_init__(self) -> None:
         if self.lost_timeout_frames < 1 or self.reid_timeout_frames < 1:
@@ -135,6 +162,14 @@ class MotionMemoryConfig:
             raise ValueError("velocity_decay phai trong (0, 1]")
         if self.min_speed_ratio < 0.0:
             raise ValueError("min_speed_ratio phai >= 0")
+        if not 0.0 < self.match_iou <= 1.0:
+            raise ValueError("match_iou phai trong (0, 1]")
+        if self.match_center_ratio <= 0.0:
+            raise ValueError("match_center_ratio phai > 0")
+        if self.match_gate_growth < 0.0:
+            raise ValueError("match_gate_growth phai >= 0")
+        if self.max_scale_change < 1.0:
+            raise ValueError("max_scale_change phai >= 1")
 
 
 @dataclass(frozen=True)
@@ -171,8 +206,14 @@ class MotionMemory:
         self._state: TrackState = TrackState.TRACKING
         self._frames_since_confirmed: int = 0
         self._frames_in_state: int = 0
+        self._track_id: Optional[int] = None
 
     # ---------------- thuoc tinh doc ----------------
+
+    @property
+    def track_id(self) -> Optional[int]:
+        """ID tracker hien tai cua muc tieu (co the doi sau khi khop lai)."""
+        return self._track_id
 
     @property
     def state(self) -> TrackState:
@@ -195,14 +236,20 @@ class MotionMemory:
     def update(
         self,
         observation: Optional[Observation] = None,
+        candidates: Optional[Sequence[Observation]] = None,
         *,
         reid_matched: bool = False,
     ) -> MotionPrediction:
         """Cap nhat memory bang quan sat cua frame hien tai.
 
         Args:
-            observation: quan sat confirmed cua frame nay, hoac None neu
-                detector/tracker khong tra ve muc tieu.
+            observation: quan sat confirmed cua muc tieu trong frame nay, hoac
+                None neu detector/tracker khong tra ve muc tieu. Neu
+                observation co track_id KHAC ID hien tai cua memory, no duoc
+                xu ly nhu mot ung vien (phai qua gate).
+            candidates: cac detection khac trong frame (tuy chon), dung de
+                khop lai khi dang LOST va BoT-SORT da cap ID moi. Ung vien
+                trung ID hien tai duoc coi la observation cua muc tieu.
             reid_matched: chi co y nghia khi dang o state REIDENTIFYING - bao
                 rang `observation` den tu mot lan Re-ID match thanh cong.
 
@@ -212,11 +259,20 @@ class MotionMemory:
         if self._state is TrackState.FAILED:
             return self._emit(bbox=None, confidence=0.0)
 
+        observation, others = self._split_target(observation, candidates)
+
         if observation is not None:
             accepted = self._state is not TrackState.REIDENTIFYING or reid_matched
             if accepted:
                 self._accept(observation)
                 return self._emit(bbox=observation.bbox, confidence=1.0)
+
+        # Gating chuyen dong CHI trong LOST (con trong motion horizon).
+        if self._state is TrackState.LOST and others:
+            match = self._gate(others)
+            if match is not None:
+                self._accept(match)
+                return self._emit(bbox=match.bbox, confidence=1.0)
 
         self._on_missing_detection()
 
@@ -236,6 +292,7 @@ class MotionMemory:
         self._state = TrackState.TRACKING
         self._frames_since_confirmed = 0
         self._frames_in_state = 0
+        self._track_id = None
 
     # ---------------- noi bo ----------------
 
@@ -243,6 +300,61 @@ class MotionMemory:
         self._history.append(observation)
         self._transition(TrackState.TRACKING)
         self._frames_since_confirmed = 0
+        if observation.track_id is not None:
+            self._track_id = observation.track_id
+
+    def _split_target(
+        self,
+        observation: Optional[Observation],
+        candidates: Optional[Sequence[Observation]],
+    ) -> tuple[Optional[Observation], list[Observation]]:
+        """Tach observation cua muc tieu (trung ID hien tai) khoi ung vien khac."""
+        others = list(candidates or ())
+        if self._track_id is None:
+            return observation, others
+        if (
+            observation is not None
+            and observation.track_id is not None
+            and observation.track_id != self._track_id
+        ):
+            others.append(observation)
+            observation = None
+        if observation is None:
+            for i, cand in enumerate(others):
+                if cand.track_id == self._track_id:
+                    observation = others.pop(i)
+                    break
+        return observation, others
+
+    def _gate(self, candidates: Sequence[Observation]) -> Optional[Observation]:
+        """Khop lai bang chuyen dong; tra ve ung vien DUY NHAT qua gate, hoac None."""
+        if not self._history:
+            return None
+        last_obs = self._history[-1]
+        last = last_obs.bbox
+        scale = (last.width + last.height) / 2.0
+        last_area = last.width * last.height
+        if scale <= 0.0 or last_area <= 0.0:
+            return None
+        cfg = self.config
+
+        passed: list[Observation] = []
+        for cand in candidates:
+            if last_obs.cls is not None and cand.cls != last_obs.cls:
+                continue
+            area_ratio = (cand.bbox.width * cand.bbox.height) / last_area
+            if not 1.0 / cfg.max_scale_change <= area_ratio <= cfg.max_scale_change:
+                continue
+            gap = max(1, cand.frame_idx - last_obs.frame_idx)
+            predicted = self._extrapolate(gap)
+            if predicted is None:
+                continue
+            (px, py), (cx, cy) = predicted.center, cand.bbox.center
+            radius = scale * cfg.match_center_ratio * (1.0 + cfg.match_gate_growth * gap)
+            close = ((cx - px) ** 2 + (cy - py) ** 2) ** 0.5 <= radius
+            if close or _iou(predicted, cand.bbox) >= cfg.match_iou:
+                passed.append(cand)
+        return passed[0] if len(passed) == 1 else None
 
     def _on_missing_detection(self) -> None:
         self._frames_since_confirmed += 1
@@ -274,6 +386,7 @@ class MotionMemory:
             confidence=confidence,
             frames_since_confirmed=self._frames_since_confirmed,
             state=self._state,
+            track_id=self._track_id,
         )
 
     def _prediction_confidence(self) -> float:
@@ -382,3 +495,15 @@ class MotionMemory:
         dx = fit.vx * gain
         dy = fit.vy * gain
         return BBox(last.x1 + dx, last.y1 + dy, last.x2 + dx, last.y2 + dy)
+
+
+def _iou(a: BBox, b: BBox) -> float:
+    """IoU hai bbox xyxy. Viet rieng (khong import src.evaluate) de tranh
+    import vong: evaluate.py da import BBox tu module nay."""
+    iw = min(a.x2, b.x2) - max(a.x1, b.x1)
+    ih = min(a.y2, b.y2) - max(a.y1, b.y1)
+    if iw <= 0.0 or ih <= 0.0:
+        return 0.0
+    inter = iw * ih
+    union = a.width * a.height + b.width * b.height - inter
+    return inter / union if union > 0.0 else 0.0
