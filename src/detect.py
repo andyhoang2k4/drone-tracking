@@ -17,6 +17,7 @@ from typing import Any, Iterator, Optional
 
 from src.utils.inference_settings import (
     DEFAULT_TRAIN_CONFIG,
+    resolve_conf,
     resolve_imgsz,
     write_inference_meta,
 )
@@ -38,7 +39,7 @@ def iter_detections(
     weights: str,
     source: str,
     *,
-    conf: float = 0.25,
+    conf: float,
     imgsz: int,
     device: Optional[str] = None,
     classes: Optional[list[int]] = None,
@@ -83,7 +84,12 @@ def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
     parser.add_argument("--weights", required=True, help="Duong dan file .pt")
     parser.add_argument("--source", required=True, help="Video/thu muc anh/camera")
     parser.add_argument("--output", type=Path, required=True, help="File .jsonl")
-    parser.add_argument("--conf", type=float, default=0.25)
+    parser.add_argument(
+        "--conf",
+        type=float,
+        default=None,
+        help="Bo trong = inference.conf trong configs/train_config.yaml (dung chung)",
+    )
     parser.add_argument(
         "--imgsz",
         type=int,
@@ -121,7 +127,12 @@ def main(argv: Optional[list[str]] = None) -> int:
     print(f"imgsz = {choice.imgsz} (nguon: {choice.source})")
     for warning in choice.warnings:
         print(f"CANH BAO: {warning}")
-    meta_path = write_inference_meta(args.output, vars(args), choice)
+    conf_choice = resolve_conf(args.conf, train_config=args.train_config)
+    args.conf = conf_choice.conf
+    print(f"conf = {conf_choice.conf} (nguon: {conf_choice.source})")
+    if conf_choice.conf != conf_choice.config_conf:
+        print(f"CANH BAO: conf khac inference.conf={conf_choice.config_conf} trong config")
+    meta_path = write_inference_meta(args.output, vars(args), choice, conf_choice)
 
     with JsonlLogger(args.output, echo=args.echo) as log:
         for record in iter_detections(

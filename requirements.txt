@@ -19,6 +19,9 @@ ultralytics==8.4.174
 torch==2.14.1
 torchvision==0.29.1
 opencv-python==4.10.0.84
+# lap: BoT-SORT/ByteTrack can (ultralytics tu cai qua AutoUpdate neu thieu).
+# 2026-11-13: ghim dung ban AutoUpdate da cai tren cloud PC (pip show lap).
+lap==0.5.14
 
 numpy==1.26.4
 PyYAML==6.0.2

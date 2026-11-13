@@ -14,7 +14,9 @@ if str(REPO_ROOT) not in sys.path:
 
 from src.utils.inference_settings import (  # noqa: E402
     DEFAULT_TRAIN_CONFIG,
+    config_conf,
     find_train_run_context,
+    resolve_conf,
     resolve_imgsz,
 )
 
@@ -110,3 +112,43 @@ def test_repo_train_config_has_imgsz():
     """configs/train_config.yaml cua repo phai co common.imgsz (bac uu tien 3)."""
     choice = resolve_imgsz(None, train_config=DEFAULT_TRAIN_CONFIG)
     assert choice.imgsz > 0 and choice.source.startswith("train_config:")
+
+
+# ---------------- conf (inference.conf trong train_config) ----------------
+
+
+def _conf_config(tmp_path: Path, body: str) -> Path:
+    path = tmp_path / "train_config_conf.yaml"
+    path.write_text(body, encoding="utf-8")
+    return path
+
+
+def test_conf_from_config_and_cli_override(tmp_path: Path):
+    cfg = _conf_config(tmp_path, "inference:\n  conf: 0.3\n")
+    choice = resolve_conf(None, train_config=cfg)
+    assert (choice.conf, choice.source, choice.config_conf) == (0.3, f"train_config:{cfg}", 0.3)
+    choice = resolve_conf(0.5, train_config=cfg)
+    assert (choice.conf, choice.source, choice.config_conf) == (0.5, "cli", 0.3)
+
+
+@pytest.mark.parametrize("body", ["common:\n  imgsz: 960\n", "inference:\n  conf: null\n"])
+def test_conf_missing_in_config_raises(tmp_path: Path, body: str):
+    with pytest.raises(ValueError, match="inference.conf"):
+        resolve_conf(None, train_config=_conf_config(tmp_path, body))
+
+
+@pytest.mark.parametrize("bad", ["0", "1.0", "-0.1", "'0.25'", "true"])
+def test_conf_invalid_in_config(tmp_path: Path, bad: str):
+    with pytest.raises(ValueError):
+        config_conf(_conf_config(tmp_path, f"inference:\n  conf: {bad}\n"))
+
+
+@pytest.mark.parametrize("bad", [0.0, 1.0, 2, True])
+def test_conf_invalid_cli(tmp_path: Path, bad):
+    with pytest.raises(ValueError):
+        resolve_conf(bad, train_config=_conf_config(tmp_path, "inference:\n  conf: 0.25\n"))
+
+
+def test_repo_train_config_has_conf():
+    """configs/train_config.yaml cua repo phai co inference.conf (dung chung 2 model)."""
+    assert 0.0 < config_conf(DEFAULT_TRAIN_CONFIG) < 1.0

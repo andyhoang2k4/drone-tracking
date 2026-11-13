@@ -28,7 +28,7 @@ def _fake_iter(key: str, seen: dict):
 @pytest.fixture
 def train_config(tmp_path: Path) -> Path:
     path = tmp_path / "train_config.yaml"
-    path.write_text("common:\n  imgsz: 960\n", encoding="utf-8")
+    path.write_text("common:\n  imgsz: 960\ninference:\n  conf: 0.25\n", encoding="utf-8")
     return path
 
 
@@ -52,6 +52,22 @@ def test_default_imgsz_from_train_config(tmp_path, train_config, monkeypatch, mo
     assert meta["imgsz"] == 960
     assert meta["imgsz_source"] == f"train_config:{train_config}"
     assert meta["weights"] == "yolo11n-seg.pt"
+    # conf lay tu inference.conf, ghi kem nguon
+    assert seen["conf"] == 0.25
+    assert (meta["conf"], meta["conf_source"]) == (0.25, f"train_config:{train_config}")
+
+
+@pytest.mark.parametrize("module,func,key,extra", CASES)
+def test_cli_conf_override_recorded(tmp_path, train_config, monkeypatch, module, func, key, extra):
+    seen: dict = {}
+    monkeypatch.setattr(module, func, _fake_iter(key, seen))
+    out = tmp_path / "b.jsonl"
+    argv = ["--weights", "w.pt", "--source", "clip.mp4", "--output", str(out),
+            "--train-config", str(train_config), "--conf", "0.4", *extra]
+    assert module.main(argv) == 0
+    meta = json.loads((tmp_path / "b.meta.json").read_text(encoding="utf-8"))
+    assert seen["conf"] == 0.4
+    assert (meta["conf"], meta["conf_source"], meta["config_conf"]) == (0.4, "cli", 0.25)
 
 
 @pytest.mark.parametrize("module,func,key,extra", CASES)
@@ -82,3 +98,5 @@ def test_no_hardcoded_imgsz_default(module):
     assert inspect.signature(func).parameters["imgsz"].default is inspect.Parameter.empty
     args = module.parse_args(["--weights", "w", "--source", "s", "--output", "o.jsonl"])
     assert args.imgsz is None
+    assert args.conf is None
+    assert inspect.signature(func).parameters["conf"].default is inspect.Parameter.empty

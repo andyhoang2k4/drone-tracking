@@ -12,7 +12,9 @@ detector:
   # configs/train_config.yaml. Dien so neu muon co dinh; --imgsz tren CLI
   # van uu tien cao nhat (src/utils/inference_settings.py).
   imgsz: null
-  conf: 0.25
+  # conf co dinh o inference.conf trong configs/train_config.yaml (dung chung
+  # cho ca hai model); --conf chi de thu nghiem, nguon ghi vao meta.
+  conf: null
 
 tracker:
   type: botsort

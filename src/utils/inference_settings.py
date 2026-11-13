@@ -10,6 +10,11 @@ Thu tu uu tien (cao -> thap):
     3. `common.imgsz` trong configs/train_config.yaml.
 
 Khong tim duoc o dau -> raise, KHONG roi ve mot gia tri mac dinh ngam.
+
+conf (nguong confidence detection): CO DINH o `inference.conf` trong
+configs/train_config.yaml, dung chung cho YOLO11 va YOLO26. `--conf` tren CLI
+van ghi de duoc (de thu nghiem) nhung nguon duoc ghi lai, va src/evaluate.py
+tu choi log co conf khac config.
 """
 
 from __future__ import annotations
@@ -137,7 +142,51 @@ def resolve_imgsz(
     return ImgszChoice(imgsz=imgsz, source=source, warnings=warnings)
 
 
-def write_inference_meta(output: PathLike, params: Mapping[str, Any], choice: ImgszChoice) -> Path:
+@dataclass(frozen=True)
+class ConfChoice:
+    conf: float
+    source: str
+    config_conf: Optional[float] = None
+
+    def as_dict(self) -> dict[str, Any]:
+        return {"conf": self.conf, "conf_source": self.source, "config_conf": self.config_conf}
+
+
+def _valid_conf(value: Any, where: str) -> Optional[float]:
+    """None/"" -> None. Ngoai khoang (0, 1) hoac sai kieu -> ValueError."""
+    if value is None or value == "":
+        return None
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or not 0.0 < value < 1.0:
+        raise ValueError(f"conf khong hop le ({value!r}) trong {where}, can 0 < conf < 1")
+    return float(value)
+
+
+def config_conf(train_config: PathLike = DEFAULT_TRAIN_CONFIG) -> float:
+    """`inference.conf` trong train_config; thieu -> raise (khong mac dinh ngam)."""
+    path = Path(train_config)
+    if not path.is_file():
+        raise ValueError(f"Khong thay {path} de doc inference.conf")
+    inference = _load_yaml(path).get("inference") or {}
+    value = _valid_conf(inference.get("conf"), str(path))
+    if value is None:
+        raise ValueError(f"{path} thieu inference.conf (dung chung cho ca hai model)")
+    return value
+
+
+def resolve_conf(cli_conf: Optional[float], *, train_config: PathLike = DEFAULT_TRAIN_CONFIG) -> ConfChoice:
+    """conf = `inference.conf` cua train_config; `--conf` ghi de neu co."""
+    configured = config_conf(train_config)
+    if cli_conf is None:
+        return ConfChoice(conf=configured, source=f"train_config:{train_config}", config_conf=configured)
+    return ConfChoice(conf=_valid_conf(cli_conf, "--conf"), source="cli", config_conf=configured)
+
+
+def write_inference_meta(
+    output: PathLike,
+    params: Mapping[str, Any],
+    choice: ImgszChoice,
+    conf_choice: Optional[ConfChoice] = None,
+) -> Path:
     """Ghi tham so inference da dung (gom imgsz + nguon) canh log: <output>.meta.json.
 
     Dung de so sanh cong bang giua cac lan chay (vd co/khong Motion Memory).
@@ -147,5 +196,7 @@ def write_inference_meta(output: PathLike, params: Mapping[str, Any], choice: Im
     meta_path = Path(output).with_suffix(".meta.json")
     meta = {k: (str(v) if isinstance(v, Path) else v) for k, v in params.items()}
     meta.update(choice.as_dict())
+    if conf_choice is not None:
+        meta.update(conf_choice.as_dict())
     write_json(meta_path, meta)
     return meta_path

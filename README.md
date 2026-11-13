@@ -30,7 +30,8 @@ khong sua ma nguon noi bo cua `ultralytics`.
 | Duong dan | Noi dung |
 |---|---|
 | `configs/botsort.yaml` | Config BoT-SORT rieng cua project (Re-ID mac dinh TAT) |
-| `configs/train_config.yaml` | Config train dung chung cho YOLO11-seg va YOLO26-seg |
+| `configs/train_config.yaml` | Config train dung chung cho YOLO11-seg va YOLO26-seg; `inference.conf` dung chung khi inference/danh gia |
+| `configs/eval_visdrone.yaml` | Danh gia VisDrone2019-MOT (val/test-dev): nguong IoU/IoA, class-aware, warmup FPS |
 | `src/detect.py` | Chay detection, log JSONL |
 | `src/track.py` | Chay detection + BoT-SORT, log JSONL |
 | `src/motion_memory.py` | Motion memory / temporal propagation |
@@ -52,7 +53,8 @@ khong sua ma nguon noi bo cua `ultralytics`.
 | `detect.py`, `track.py`, `run_pipeline.py` | Smoke test CPU qua voi yolo11n-seg/yolo26n-seg pretrained (ultralytics 8.4.174), **chua chay tren GPU / dataset that** |
 | `motion_memory.py` state machine | Xong, co unit test |
 | `motion_memory.py` ngoai suy vi tri + prediction confidence | **Chua implement** (roadmap buoc 5) |
-| `evaluate.py` cac ham tinh metric | **Chua implement** - cho chot dinh dang ground truth (roadmap buoc 4) |
+| `evaluate.py` precision/recall + ID switch tren ground truth VisDrone-MOT | Xong (unit test du lieu gia, chua chay tren log that) |
+| `evaluate.py` metric occlusion | **Chua implement** (roadmap buoc 4) |
 
 ## Cai dat
 
@@ -115,6 +117,22 @@ python scripts/run_pipeline.py --weights <best.pt> \
 # imgsz: --imgsz > detector.imgsz trong experiments/<id>/config.yaml >
 # run_context.json canh weights > configs/train_config.yaml. Gia tri da dung
 # ghi vao <output>.meta.json (detect/track) va run_context.json (pipeline).
+# conf: co dinh o inference.conf trong configs/train_config.yaml, dung chung
+# cho YOLO11/YOLO26; --conf chi de thu nghiem (nguon ghi vao meta, va
+# src/evaluate.py tu choi log co conf khac config).
+
+# Danh gia tracking tren VisDrone2019-MOT (tung sequence rieng, val hoac test-dev).
+# --source cua track phai la thu muc anh cua DUNG sequence do.
+SEQ=uav0000086_00000_v
+python -m src.track --weights <best.pt> \
+    --source data/raw/VisDrone2019-MOT/VisDrone2019-MOT-val/sequences/$SEQ \
+    --output experiments/<exp_id>/logs/val/$SEQ.jsonl
+python -m src.evaluate --split val --sequence $SEQ \
+    --log experiments/<exp_id>/logs/val/$SEQ.jsonl \
+    --output experiments/<exp_id>/metrics/val/$SEQ.json
+# metrics JSON: precision + recall (song song), TP/FP/FN, so box bi loai do vung
+# bo qua, ID switch, FPS/latency thuc do (bo fps_warmup_frames frame dau).
+# Tu choi: log thieu frame, log khong co `path`, sai sequence, conf khac config.
 
 # Train (chi tren Ubuntu/cloud)
 bash scripts/train_yolo11.sh yolo11_baseline_001
@@ -131,3 +149,17 @@ python -m pytest tests/ -q
 Precision va recall bao cao **song song**. Moi kich ban occlusion bat buoc co
 ground truth cho toan bo sequence. Danh gia Motion Memory bat buoc co ablation
 co/khong Motion Memory tren cung detector + tracker. Chi tiet: CLAUDE.md muc 12.
+
+### Quy tac ground truth VisDrone2019-MOT (`src/evaluate.py`)
+
+1. GT hop le: `score=1` va category 1..10 (map sang class 0..9 theo
+   `configs/dataset_visdrone.yaml`). Con lai la **vung bi bo qua**: `score=0`,
+   category 0 (ignored region), category ngoai map (vd 11 "others").
+2. Moi frame, truoc khi ghep cap: prediction co IoA (dien tich giao / dien tich
+   prediction) >= `ignore_ioa` (mac dinh 0.5) voi mot vung bi bo qua bi **loai**
+   (khong TP, khong FP). GT hop le nam trong vung bi bo qua (IoA theo dien tich
+   GT >= `ignore_ioa`) cung bi loai (khong FN).
+3. Ghep cap tham lam theo IoU giam dan, IoU >= `iou_threshold` (0.5), cung
+   class neu `class_aware`.
+4. ID switch: cung mot `target_id` GT duoc ghep voi track ID khac lan ghep truoc
+   (tinh ca khi co khoang mat o giua).

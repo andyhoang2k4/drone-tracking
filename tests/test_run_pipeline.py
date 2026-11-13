@@ -24,7 +24,7 @@ def _run(tmp_path: Path, monkeypatch, *extra: str) -> tuple[dict, dict]:
 
     monkeypatch.setattr(rp, "iter_tracks", fake_iter_tracks)
     train_config = tmp_path / "train_config.yaml"
-    train_config.write_text("common:\n  imgsz: 960\n", encoding="utf-8")
+    train_config.write_text("common:\n  imgsz: 960\ninference:\n  conf: 0.25\n", encoding="utf-8")
     argv = [
         "--weights", "w.pt", "--source", "scn01.mp4", "--experiment-id", "exp",
         "--target-track-id", "1", "--tracker", str(REPO_ROOT / "configs" / "botsort.yaml"),
@@ -42,6 +42,8 @@ def test_run_context_records_resolved_imgsz(tmp_path: Path, monkeypatch):
     assert context["config"]["imgsz"] == 960
     assert context["inference"]["imgsz"] == 960
     assert context["inference"]["imgsz_source"].startswith("train_config:")
+    assert seen["conf"] == 0.25 and context["config"]["conf"] == 0.25
+    assert context["inference"]["conf_source"].startswith("train_config:")
 
 
 def test_experiment_config_and_cli(tmp_path: Path, monkeypatch):

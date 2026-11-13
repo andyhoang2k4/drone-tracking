@@ -37,7 +37,6 @@ import os
 import shutil
 import sys
 from collections import Counter
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable, Mapping, Optional
 
@@ -47,38 +46,15 @@ if str(REPO_ROOT) not in sys.path:
 
 from src.utils.logging_utils import write_json  # noqa: E402
 from src.utils.run_context import git_info  # noqa: E402
+from src.utils.visdrone import VisDroneBox, parse_annotation_line  # noqa: E402,F401
 
 IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png"}
 MANIFEST_NAME = "manifest.json"
 
 
-@dataclass(frozen=True)
-class VisDroneBox:
-    frame_idx: int
-    target_id: int
-    left: float
-    top: float
-    width: float
-    height: float
-    score: int
-    category: int
-    truncation: int
-    occlusion: int
-
-
 # ---------------- ham thuan (co unit test) ----------------
-
-
-def parse_annotation_line(line: str) -> Optional[VisDroneBox]:
-    """Doc mot dong annotation. Tra ve None voi dong trong."""
-    line = line.strip()
-    if not line:
-        return None
-    parts = [p.strip() for p in line.split(",") if p.strip() != ""]
-    if len(parts) < 10:
-        raise ValueError(f"Dong annotation thieu cot (can 10): {line!r}")
-    values = [int(float(p)) for p in parts[:10]]
-    return VisDroneBox(*values)
+# VisDroneBox / parse_annotation_line chuyen sang src/utils/visdrone.py (dung
+# chung voi src/evaluate.py); van import lai o day de giu API cu.
 
 
 def to_yolo_bbox(

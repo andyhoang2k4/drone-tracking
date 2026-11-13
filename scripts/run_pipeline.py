@@ -34,7 +34,11 @@ from src.track import (  # noqa: E402
     iter_tracks,
     track_record_to_observation,
 )
-from src.utils.inference_settings import DEFAULT_TRAIN_CONFIG, resolve_imgsz  # noqa: E402
+from src.utils.inference_settings import (  # noqa: E402
+    DEFAULT_TRAIN_CONFIG,
+    resolve_conf,
+    resolve_imgsz,
+)
 from src.utils.logging_utils import JsonlLogger, write_json  # noqa: E402
 from src.utils.run_context import build_run_context  # noqa: E402
 
@@ -55,7 +59,12 @@ def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
         help="Track ID cua muc tieu can bam theo",
     )
     parser.add_argument("--tracker", type=Path, default=DEFAULT_TRACKER_CONFIG)
-    parser.add_argument("--conf", type=float, default=0.25)
+    parser.add_argument(
+        "--conf",
+        type=float,
+        default=None,
+        help="Bo trong = inference.conf trong configs/train_config.yaml (dung chung)",
+    )
     parser.add_argument(
         "--imgsz",
         type=int,
@@ -103,6 +112,11 @@ def main(argv: Optional[list[str]] = None) -> int:
     print(f"imgsz = {choice.imgsz} (nguon: {choice.source})")
     for warning in choice.warnings:
         print(f"CANH BAO: {warning}")
+    conf_choice = resolve_conf(args.conf, train_config=args.train_config)
+    args.conf = conf_choice.conf
+    print(f"conf = {conf_choice.conf} (nguon: {conf_choice.source})")
+    if conf_choice.conf != conf_choice.config_conf:
+        print(f"CANH BAO: conf khac inference.conf={conf_choice.config_conf} trong config")
 
     # Metadata tai hien experiment (CLAUDE.md muc 14)
     write_json(
@@ -112,7 +126,7 @@ def main(argv: Optional[list[str]] = None) -> int:
             config=vars(args),
             dataset=args.source,
             repo_root=REPO_ROOT,
-            extra={"inference": choice.as_dict()},
+            extra={"inference": {**choice.as_dict(), **conf_choice.as_dict()}},
         ),
     )
 
