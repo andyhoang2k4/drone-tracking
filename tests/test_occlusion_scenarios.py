@@ -344,3 +344,32 @@ def test_repo_config_loads():
     assert set(cfg.groups) == {"dev", "heldout"}
     assert cfg.durations_frames == (5, 15, 30, 60)
     assert len(cfg.occluders) == 4
+
+
+def test_config_sha256_ignores_line_endings(tmp_path, raw):
+    """Cung noi dung, LF (Linux) hay CRLF (Windows) -> cung config_sha256."""
+    from src.occlusion_scenarios import config_sha256
+
+    text = CONFIG_TEMPLATE.format(seed=7, raw=raw.as_posix(), dataset=DATASET_CONFIG,
+                                  out=(tmp_path / "o").as_posix()).encode("utf-8")
+    lf_bytes = text.replace(b"\r\n", b"\n")
+    crlf_bytes = lf_bytes.replace(b"\n", b"\r\n")
+    lf, crlf = tmp_path / "lf.yaml", tmp_path / "crlf.yaml"
+    lf.write_bytes(lf_bytes)
+    crlf.write_bytes(crlf_bytes)
+    assert lf_bytes != crlf_bytes
+    assert load_scenario_config(lf).config_sha256 == load_scenario_config(crlf).config_sha256
+    assert config_sha256(crlf_bytes) == config_sha256(lf_bytes)
+    # Noi dung khac (khong chi line ending) -> hash khac
+    assert config_sha256(b"a: 1\n") != config_sha256(b"a: 2\n")
+
+
+def test_existing_scenarios_skipped_after_line_ending_change(tmp_path, raw):
+    """Sinh bang file LF, chay lai voi file CRLF cung noi dung -> bo qua, khong doi hoi --overwrite."""
+    path = write_config(tmp_path, raw, tmp_path / "out", name="out.yaml")
+    lf_bytes = path.read_bytes().replace(b"\r\n", b"\n")
+    path.write_bytes(lf_bytes)
+    first = generate_group(load_scenario_config(path), "dev")
+    path.write_bytes(lf_bytes.replace(b"\n", b"\r\n"))
+    second = generate_group(load_scenario_config(path), "dev")
+    assert first["scenarios"] and sorted(second["skipped_existing"]) == sorted(first["scenarios"])

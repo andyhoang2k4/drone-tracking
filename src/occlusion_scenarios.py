@@ -97,6 +97,12 @@ def _resolve(repo_root: Path, value: PathLike) -> Path:
     return path if path.is_absolute() else repo_root / path
 
 
+def config_sha256(raw_bytes: bytes) -> str:
+    """SHA-256 cua noi dung config sau khi bo ky tu CR: cung noi dung tren
+    Windows (CRLF) va Linux (LF) cho cung hash."""
+    return hashlib.sha256(raw_bytes.replace(b"\r", b"")).hexdigest()
+
+
 def load_scenario_config(path: PathLike, repo_root: Optional[PathLike] = None) -> ScenarioConfig:
     import yaml
 
@@ -137,7 +143,7 @@ def load_scenario_config(path: PathLike, repo_root: Optional[PathLike] = None) -
             solid_color_bgr=tuple(int(c) for c in params["solid_color_bgr"]),  # type: ignore[arg-type]
             image_format=str(image["format"]).lower(),
             jpeg_quality=int(image.get("jpeg_quality", 95)),
-            config_sha256=hashlib.sha256(raw_bytes).hexdigest(),
+            config_sha256=config_sha256(raw_bytes),
         )
     except (KeyError, TypeError) as exc:
         raise ScenarioConfigError(f"{path}: thieu/sai khoa config: {exc}") from exc
@@ -609,5 +615,5 @@ __all__: Sequence[str] = [
     "ScenarioConfig", "ScenarioConfigError", "OccluderSpec", "TargetPlan", "load_scenario_config",
     "load_sequence", "valid_frames", "valid_starts", "plan_sequence", "occluder_box",
     "write_scenario", "generate_group", "scenario_name", "derived_seed", "load_manifest",
-    "manifest_ground_truth", "occluded_flags", "scenario_image_names", "frame_order_problems",
+    "manifest_ground_truth", "occluded_flags", "config_sha256", "scenario_image_names", "frame_order_problems",
 ]
