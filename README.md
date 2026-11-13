@@ -121,7 +121,7 @@ python scripts/run_pipeline.py --weights <best.pt> \
 # cho YOLO11/YOLO26; --conf chi de thu nghiem (nguon ghi vao meta, va
 # src/evaluate.py tu choi log co conf khac config).
 
-# Danh gia tracking tren VisDrone2019-MOT (MOT sequence MOT lan, val hoac test-dev).
+# Danh gia tracking tren VisDrone2019-MOT (tung sequence rieng, val hoac test-dev).
 # --source cua track phai la thu muc anh cua DUNG sequence do.
 SEQ=uav0000086_00000_v
 python -m src.track --weights <best.pt> \

@@ -7,7 +7,7 @@ Trang thai file:
     - `load_pipeline_settings()` / `ablation_mismatches()`: DA implement - kiem
       tra hai lan chay co/khong Motion Memory dung cung weights/source/tracker/
       conf/imgsz/classes (doc tu run_context.json cua scripts/run_pipeline.py).
-    - CLI (`python -m src.evaluate`): DA implement - danh gia MOT sequence
+    - CLI (`python -m src.evaluate`): DA implement - danh gia tung sequence
       VisDrone (val hoac test-dev) tu log cua src/track.py, ghi metrics JSON.
     - `compute_occlusion_metrics()`: CHUA implement (roadmap buoc 4).
 
@@ -604,7 +604,7 @@ def evaluate_sequence(
 
 def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Danh gia MOT sequence VisDrone2019-MOT tu log cua src/track.py"
+        description="Danh gia mot sequence VisDrone2019-MOT tu log cua src/track.py"
     )
     parser.add_argument("--log", type=Path, required=True, help="track.jsonl (canh no la .meta.json)")
     parser.add_argument("--split", required=True, help="val hoac test-dev (theo eval config)")

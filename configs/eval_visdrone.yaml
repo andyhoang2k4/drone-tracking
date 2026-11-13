@@ -1,5 +1,5 @@
 # Danh gia tracking tren VisDrone2019-MOT co ground truth (roadmap buoc 3).
-# Doc boi `python -m src.evaluate` - moi lan chay danh gia MOT sequence.
+# Doc boi `python -m src.evaluate` - moi lan chay danh gia mot sequence rieng.
 #
 # conf KHONG nam o day: co dinh o inference.conf trong configs/train_config.yaml
 # (dung chung YOLO11/YOLO26); evaluate tu choi log co conf khac gia tri do.
