@@ -218,8 +218,8 @@ class MotionMemory:
         self._history: Deque[Observation] = deque(maxlen=self.config.history_size)
         self._state: TrackState = TrackState.TRACKING
         self._frames_since_confirmed: int = 0
-        self._frames_in_state: int = 0
         self._track_id: Optional[int] = None
+        self._last_frame_idx: Optional[int] = None  # frame_idx cua lan goi truoc (neu co)
 
     # ---------------- thuoc tinh doc ----------------
 
@@ -252,6 +252,7 @@ class MotionMemory:
         candidates: Optional[Sequence[Observation]] = None,
         *,
         reid_matched: bool = False,
+        frame_idx: Optional[int] = None,
     ) -> MotionPrediction:
         """Cap nhat memory bang quan sat cua frame hien tai.
 
@@ -266,6 +267,21 @@ class MotionMemory:
             reid_matched: chi co y nghia khi dang o state REIDENTIFYING - bao
                 rang `observation` den tu mot lan Re-ID match thanh cong (khong
                 can trung ID). O state khac flag nay bi bo qua.
+            frame_idx: chi so frame hien tai (tuy chon). Neu co,
+                frames_since_confirmed = frame_idx - frame_idx confirmed cuoi
+                (dung khi nguon bo frame hoac phia goi bo qua loi goi), va cac
+                timeout so sanh tren so do. Neu khong co, dem +1 moi lan goi
+                thieu detection (hanh vi cu). Phai tang dan qua cac lan goi
+                va khop observation.frame_idx (neu co observation).
+
+        Hai moc timeout deu tinh tren frames_since_confirmed (k)::
+
+            k <= L                 LOST            (L = lost_timeout_frames)
+            L < k <= L + 1 + R     REIDENTIFYING   (R = reid_timeout_frames)
+            k >  L + 1 + R         FAILED
+
+        Neu k nhay qua nhieu moc trong mot lan goi (bo frame), state di qua
+        cac moc lien tiep ngay trong lan goi do.
 
         Chinh sach REIDENTIFYING (quyet dinh B): dung ID tracker cu quay lai
         duoc coi la match hop le. KHONG dung gate chuyen dong voi ID khac -
@@ -274,6 +290,7 @@ class MotionMemory:
         Returns:
             MotionPrediction cua frame hien tai.
         """
+        self._check_frame_idx(frame_idx, observation)
         if self._state is TrackState.FAILED:
             return self._emit(bbox=None, confidence=0.0)
 
@@ -298,7 +315,7 @@ class MotionMemory:
                 self._accept(match)
                 return self._emit(match.bbox, 1.0, RECOVER_MOTION_GATE)
 
-        self._on_missing_detection()
+        self._on_missing_detection(frame_idx)
 
         if self._state is TrackState.LOST:
             bbox = self._extrapolate(self._frames_since_confirmed)
@@ -315,10 +332,25 @@ class MotionMemory:
         self._history.clear()
         self._state = TrackState.TRACKING
         self._frames_since_confirmed = 0
-        self._frames_in_state = 0
         self._track_id = None
+        self._last_frame_idx = None
 
     # ---------------- noi bo ----------------
+
+    def _check_frame_idx(
+        self, frame_idx: Optional[int], observation: Optional[Observation]
+    ) -> None:
+        if frame_idx is None:
+            return
+        if self._last_frame_idx is not None and frame_idx <= self._last_frame_idx:
+            raise ValueError(
+                f"frame_idx phai tang dan: {frame_idx} <= {self._last_frame_idx}"
+            )
+        if observation is not None and observation.frame_idx != frame_idx:
+            raise ValueError(
+                f"frame_idx={frame_idx} khac observation.frame_idx={observation.frame_idx}"
+            )
+        self._last_frame_idx = frame_idx
 
     def _accept(self, observation: Observation) -> None:
         self._history.append(observation)
@@ -385,29 +417,29 @@ class MotionMemory:
                 passed.append(cand)
         return passed[0] if len(passed) == 1 else None
 
-    def _on_missing_detection(self) -> None:
-        self._frames_since_confirmed += 1
-        self._frames_in_state += 1
+    def _on_missing_detection(self, frame_idx: Optional[int] = None) -> None:
+        if frame_idx is not None and self._history:
+            self._frames_since_confirmed = frame_idx - self._history[-1].frame_idx
+        else:
+            self._frames_since_confirmed += 1
+        k = self._frames_since_confirmed
+        cfg = self.config
 
         if self._state is TrackState.TRACKING:
             self._transition(TrackState.LOST)
-        elif (
-            self._state is TrackState.LOST
-            # Dem tu lan confirmed gan nhat: motion horizon dai dung
-            # lost_timeout_frames frame du doan.
-            and self._frames_since_confirmed > self.config.lost_timeout_frames
-        ):
+        # Moc tinh tu lan confirmed cuoi: motion horizon dai dung L frame du
+        # doan. Khi dem +1 moi lan goi, REIDENTIFYING luon bat dau o k = L+1
+        # nen dieu kien nay tuong duong dem so frame trong state.
+        if self._state is TrackState.LOST and k > cfg.lost_timeout_frames:
             self._transition(TrackState.REIDENTIFYING)
-        elif (
+        if (
             self._state is TrackState.REIDENTIFYING
-            and self._frames_in_state > self.config.reid_timeout_frames
+            and k > cfg.lost_timeout_frames + 1 + cfg.reid_timeout_frames
         ):
             self._transition(TrackState.FAILED)
 
     def _transition(self, new_state: TrackState) -> None:
-        if new_state is not self._state:
-            self._state = new_state
-            self._frames_in_state = 0
+        self._state = new_state
 
     def _emit(
         self,
