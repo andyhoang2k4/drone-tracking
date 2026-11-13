@@ -64,6 +64,7 @@ khong sua ma nguon noi bo cua `ultralytics`.
 | `evaluate.py` precision/recall + ID switch tren ground truth VisDrone-MOT | Xong (unit test du lieu gia, chua chay tren log that) |
 | Kich ban occlusion nhan tao (`src/occlusion_scenarios.py`) | Xong, test voi anh/annotation gia; **chua sinh tren VisDrone that** |
 | `evaluate.py` metric occlusion + gop + so sanh ablation | Xong, test voi log/manifest gia; **chua chay tren log that** |
+| `run_pipeline.py --replay-tracks` + ablation chay BoT-SORT mot lan / kich ban | Xong, test voi log track gia; **chua chay tren GPU / dataset that** |
 
 ## Cai dat
 
@@ -134,11 +135,21 @@ python scripts/run_pipeline.py ... --motion-memory \
 #   --gt-target-id <id> --gt-annotation <annotation VisDrone .txt> [--gt-first-frame 1]
 # (ghep GT voi track BoT-SORT bang IoU o frame dau muc tieu xuat hien; ket qua
 # ghi experiments/<id>/target_selection.json).
+# Replay: --replay-tracks <tracks.jsonl cua src.track> -> khong chay YOLO, doc
+# track tu log (can tracks.meta.json canh log; weights/source/tracker phai khop,
+# conf/imgsz/classes lay tu meta; SHA-256 log ghi vao run_context.json).
+# Log pipeline co truong `path` (anh nguon) de kiem tra thu tu anh.
 
 # Ablation tren kich ban occlusion (roadmap buoc 4-6), chay tren cloud:
 python scripts/generate_occlusion_scenarios.py --group dev
 python scripts/run_occlusion_ablation.py --group dev --tag 001 \
     --detector yolo11=<yolo11 best.pt> --detector yolo26=<yolo26 best.pt> --device 0
+# Moi detector x kich ban: src.track chay YOLO + BoT-SORT MOT lan
+# (experiments/<detector>_botsort_tracks_occl_dev_001/), roi baseline va Motion
+# Memory hau ky tren CUNG log do (run_pipeline --replay-tracks).
+# --dry-run: in lenh + so kich ban + so lan goi du kien. --limit-scenarios N:
+# chi N kich ban dau de do thoi gian (ban gop danh dau incomplete, khong phai
+# benchmark; dung --tag rieng).
 # -> experiments/<detector>_botsort[_mm]_occl_dev_001/{config.yaml,metrics.json}
 #    + experiments/<detector>_botsort_mm_occl_dev_001/ablation_vs_<baseline>.json
 # Commit: index.json cua nhom kich ban, config.yaml, metrics.json gop,
@@ -207,7 +218,11 @@ che la mot doan lien tuc [a, b]:
   khac tham so chay, hoac thieu kich ban so voi `index.json` (tru
   `--allow-incomplete`, danh dau incomplete).
 - **So sanh ablation** (`compare`): tu choi neu bat ky cap kich ban nao khac
-  weights/source/tracker/conf/imgsz/classes (`ablation_mismatches`).
+  weights/source/tracker/conf/imgsz/classes hoac khac log track da replay
+  (`tracks_sha256`) (`ablation_mismatches`).
+- **Kiem tra dau vao**: `occlusion` tu choi log co so frame khac manifest, hoac
+  `path` theo thu tu frame_idx khong khop ten anh da sap xep cua kich ban (lech
+  thu tu, thieu, thua anh).
 
 ```bash
 python -m src.evaluate occlusion --scenario-dir data/occlusion_test_scenarios/dev/<ten> \

@@ -45,6 +45,15 @@ occlusion, `scripts/run_occlusion_ablation.py` dat ten theo quy uoc:
 | YOLO11 + BoT-SORT + Motion Memory | `yolo11_botsort_mm_occl_<nhom>_<tag>` |
 | YOLO26 + BoT-SORT | `yolo26_botsort_occl_<nhom>_<tag>` |
 | YOLO26 + BoT-SORT + Motion Memory | `yolo26_botsort_mm_occl_<nhom>_<tag>` |
+| Log YOLO + BoT-SORT dung chung (moi detector) | `<detector>_botsort_tracks_occl_<nhom>_<tag>` |
+
+BoT-SORT chay MOT lan cho moi detector x kich ban (log track trong
+`<detector>_botsort_tracks_...`); baseline va Motion Memory hau ky tren cung log
+do (`run_pipeline --replay-tracks`), nen hai cau hinh thay chinh xac cung dau
+vao tracker. `compare` tu choi neu `tracks_sha256` khac nhau.
+
+Tag dung voi `--limit-scenarios` (do thoi gian) phai khac tag cua lan chay du;
+ban gop cua no co `completeness.complete = false`.
 
 Commit: `config.yaml`, `metrics.json` (gop; khoa `provenance` giu commit git,
 so lan chay co working tree dirty, version package cua cac lan chay) va
