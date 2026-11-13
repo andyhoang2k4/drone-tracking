@@ -12,7 +12,9 @@ Trang thai file (roadmap buoc 5, dang lam):
       suy giam, uoc luong bang hoi quy tuyen tinh tam bbox theo frame_idx.
     - Prediction confidence: DA implement - giam tuyen tinh theo motion
       horizon, nhan he so chat luong mo hinh (du lieu + residual).
-    - Chua co: khop lai bang gating, chinh sach REIDENTIFYING (commit sau).
+    - Khop lai: gating chuyen dong trong LOST; REIDENTIFYING chi bat lai khi
+      dung ID cu quay lai (hoac phia goi bao reid_matched).
+    - Chua co: appearance-based Re-ID.
 """
 
 from __future__ import annotations
@@ -82,6 +84,11 @@ class MotionPrediction:
 
     track_id: ID tracker cua muc tieu dang theo (doi khi khop lai sang ID moi
     bang gating); None neu chua biet.
+    recover_reason: CHI co gia tri o frame muc tieu duoc bat lai (tu LOST
+    hoac REIDENTIFYING ve TRACKING), None o moi frame khac:
+        "same_id"      - dung ID tracker cu quay lai,
+        "motion_gate"  - ung vien ID khac qua gate chuyen dong (chi trong LOST),
+        "reid_matched" - phia goi bao Re-ID match (update(reid_matched=True)).
     """
 
     bbox: Optional[BBox]
@@ -89,6 +96,12 @@ class MotionPrediction:
     frames_since_confirmed: int
     state: TrackState
     track_id: Optional[int] = None
+    recover_reason: Optional[str] = None
+
+
+RECOVER_SAME_ID = "same_id"
+RECOVER_MOTION_GATE = "motion_gate"
+RECOVER_REID_MATCHED = "reid_matched"
 
 
 @dataclass
@@ -251,7 +264,12 @@ class MotionMemory:
                 khop lai khi dang LOST va BoT-SORT da cap ID moi. Ung vien
                 trung ID hien tai duoc coi la observation cua muc tieu.
             reid_matched: chi co y nghia khi dang o state REIDENTIFYING - bao
-                rang `observation` den tu mot lan Re-ID match thanh cong.
+                rang `observation` den tu mot lan Re-ID match thanh cong (khong
+                can trung ID). O state khac flag nay bi bo qua.
+
+        Chinh sach REIDENTIFYING (quyet dinh B): dung ID tracker cu quay lai
+        duoc coi la match hop le. KHONG dung gate chuyen dong voi ID khac -
+        de danh cho appearance-based Re-ID sau nay.
 
         Returns:
             MotionPrediction cua frame hien tai.
@@ -259,20 +277,26 @@ class MotionMemory:
         if self._state is TrackState.FAILED:
             return self._emit(bbox=None, confidence=0.0)
 
+        prev_state = self._state
+        if prev_state is TrackState.REIDENTIFYING and reid_matched and observation is not None:
+            self._accept(observation)
+            return self._emit(observation.bbox, 1.0, RECOVER_REID_MATCHED)
+
         observation, others = self._split_target(observation, candidates)
 
-        if observation is not None:
-            accepted = self._state is not TrackState.REIDENTIFYING or reid_matched
-            if accepted:
-                self._accept(observation)
-                return self._emit(bbox=observation.bbox, confidence=1.0)
+        if observation is not None and (
+            prev_state is not TrackState.REIDENTIFYING or self._is_current_id(observation)
+        ):
+            self._accept(observation)
+            reason = RECOVER_SAME_ID if prev_state is not TrackState.TRACKING else None
+            return self._emit(observation.bbox, 1.0, reason)
 
         # Gating chuyen dong CHI trong LOST (con trong motion horizon).
-        if self._state is TrackState.LOST and others:
+        if prev_state is TrackState.LOST and others:
             match = self._gate(others)
             if match is not None:
                 self._accept(match)
-                return self._emit(bbox=match.bbox, confidence=1.0)
+                return self._emit(match.bbox, 1.0, RECOVER_MOTION_GATE)
 
         self._on_missing_detection()
 
@@ -326,6 +350,9 @@ class MotionMemory:
                     break
         return observation, others
 
+    def _is_current_id(self, observation: Observation) -> bool:
+        return observation.track_id is not None and observation.track_id == self._track_id
+
     def _gate(self, candidates: Sequence[Observation]) -> Optional[Observation]:
         """Khop lai bang chuyen dong; tra ve ung vien DUY NHAT qua gate, hoac None."""
         if not self._history:
@@ -346,6 +373,8 @@ class MotionMemory:
             if not 1.0 / cfg.max_scale_change <= area_ratio <= cfg.max_scale_change:
                 continue
             gap = max(1, cand.frame_idx - last_obs.frame_idx)
+            if gap > cfg.lost_timeout_frames:  # ngoai motion horizon
+                continue
             predicted = self._extrapolate(gap)
             if predicted is None:
                 continue
@@ -380,13 +409,19 @@ class MotionMemory:
             self._state = new_state
             self._frames_in_state = 0
 
-    def _emit(self, bbox: Optional[BBox], confidence: float) -> MotionPrediction:
+    def _emit(
+        self,
+        bbox: Optional[BBox],
+        confidence: float,
+        recover_reason: Optional[str] = None,
+    ) -> MotionPrediction:
         return MotionPrediction(
             bbox=bbox,
             confidence=confidence,
             frames_since_confirmed=self._frames_since_confirmed,
             state=self._state,
             track_id=self._track_id,
+            recover_reason=recover_reason,
         )
 
     def _prediction_confidence(self) -> float:
