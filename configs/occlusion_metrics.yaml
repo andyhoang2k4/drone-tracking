@@ -1,0 +1,45 @@
+# Dinh nghia + nguong do do occlusion (CLAUDE.md muc 12). Doc boi
+# `python -m src.evaluate occlusion|aggregate|compare` (src/evaluate.py).
+#
+# CO DINH TRUOC KHI CO BAT KY LAN CHAY THAT NAO (CLAUDE.md muc 13). Doi dinh
+# nghia/nguong sau khi da xem ket qua -> tang `version`, tinh lai cho MOI
+# experiment va ghi ro trong README cua experiment.
+# Gia tri la gia tri khoi dau chua tinh chinh (2026-11-13).
+#
+# DINH NGHIA (moi kich ban; frame danh so 0..N-1 theo manifest; khoang che la
+# mot doan lien tuc [a, b]):
+#
+#   output o frame k:
+#     - lan chay CO Motion Memory : predicted_bbox trong log (TRACKING = bbox
+#       tracker, LOST = bbox ngoai suy, REIDENTIFYING/FAILED/chua chon = khong co);
+#     - lan chay KHONG Motion Memory (baseline): tracker_bbox cua track ID muc
+#       tieu (khong co khi BoT-SORT khong xuat ID do).
+#   "du doan dung" o frame k: co output VA IoU(output, GT_k) >= correct_iou.
+#
+#   occlusion_frames            = b - a + 1 (thoi luong che).
+#   correct_prediction_ratio    = so frame du doan dung trong [a, b] / occlusion_frames.
+#   longest_tracking_gap        = doan dai nhat cac frame LIEN TIEP KHONG du doan
+#                                 dung, tinh tu frame du doan dung dau tien den
+#                                 het kich ban; chua tung dung -> = N (ca kich ban).
+#   reidentified                = ton tai k > b sao cho k .. k+M-1 deu du doan
+#                                 dung (M = reid_min_consecutive_frames, nam trong
+#                                 kich ban).
+#   time_to_reidentify_frames   = k_min - b voi k_min nho nhat o tren (>= 1;
+#                                 1 = dung ngay frame dau sau khi het che);
+#                                 null neu khong reidentified.
+#   mean_position_error_px      = trung binh khoang cach tam (output, GT) tren
+#                                 cac frame trong [a, b] CO output; null neu
+#                                 khong frame nao co output. Kem so frame co
+#                                 output de khong hieu nham.
+#   reidentified_with_new_track_id = track ID luc bat lai khac track ID truoc
+#                                 khi che (chi co y nghia khi reidentified).
+#   target_acquired_before_occlusion = co it nhat mot frame du doan dung trong
+#                                 [0, a). Kich ban khong bat duoc muc tieu VAN
+#                                 tinh vao tong (khong loai), va duoc dem rieng.
+#
+# GOP NHIEU KICH BAN (aggregate): cong gop tu so/mau so, KHONG lay trung binh
+# cac ti le cua tung kich ban. Bao cao tach theo thoi luong che (va kieu che).
+
+version: 1
+correct_iou: 0.5
+reid_min_consecutive_frames: 3
