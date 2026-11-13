@@ -34,6 +34,16 @@ common:
   fliplr: 0.5
   mosaic: 1.0
 
+# Tham so inference/danh gia dung CHUNG cho ca hai model (detect/track/
+# run_pipeline va src/evaluate.py doc tu day). KHONG dat trong `common` vi
+# `common` duoc truyen thang vao model.train().
+# conf: nguong confidence detection. 0.25 = gia tri dang dung truoc day.
+# Luu y: ultralytics model.track() tu dung 0.1 khi khong truyen conf, de vong
+# match thu hai cua BoT-SORT (track_low_thresh: 0.1) nhan duoc detection
+# diem thap; voi conf 0.25 vong do khong co detection nao duoi 0.25.
+inference:
+  conf: 0.25
+
 # Thu muc chua weights pretrained da tai san (gitignore). Train dung
 # <weights_dir>/<weights> neu co; khong co thi Ultralytics tu tai theo ten.
 weights_dir: weights

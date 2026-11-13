@@ -115,6 +115,9 @@ python scripts/run_pipeline.py --weights <best.pt> \
 # imgsz: --imgsz > detector.imgsz trong experiments/<id>/config.yaml >
 # run_context.json canh weights > configs/train_config.yaml. Gia tri da dung
 # ghi vao <output>.meta.json (detect/track) va run_context.json (pipeline).
+# conf: co dinh o inference.conf trong configs/train_config.yaml, dung chung
+# cho YOLO11/YOLO26; --conf chi de thu nghiem (nguon ghi vao meta, va
+# src/evaluate.py tu choi log co conf khac config).
 
 # Train (chi tren Ubuntu/cloud)
 bash scripts/train_yolo11.sh yolo11_baseline_001
