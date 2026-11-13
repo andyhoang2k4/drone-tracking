@@ -381,3 +381,22 @@ def test_run_rejects_missing_image(tmp_path, monkeypatch):
     (scen / "images" / "0000005.jpg").unlink()
     with pytest.raises(EvaluationError, match="Thu tu anh"):
         evaluate_occlusion_run(scen, run_dir, METRICS_CFG)
+
+
+def test_aggregate_keeps_provenance():
+    """Metrics tung kich ban khong commit -> ban gop phai giu commit/version."""
+    a, b = fake_item("a", 5, 5, 5, True, 1), fake_item("b", 5, 5, 0, False)
+    a["run"].update(git_commit="c1", git_dirty=False, versions={"ultralytics": "8.4.174"},
+                    tracks_sha256="s1")
+    b["run"].update(git_commit="c2", git_dirty=True, versions={"ultralytics": "8.4.174"},
+                    tracks_sha256="s2")
+    prov = aggregate_occlusion_metrics([a, b])["provenance"]
+    assert prov["git_commits"] == ["c1", "c2"] and prov["git_dirty_runs"] == 1
+    assert prov["versions"] == [{"ultralytics": "8.4.174"}] and prov["tracks_logs"] == 2
+
+
+def test_scenario_metrics_record_versions(tmp_path, monkeypatch):
+    scen = make_scenario(tmp_path / "scn", "s1")
+    run_dir = run_scenario(monkeypatch, scen, tmp_path / "e", "same_id")
+    run = evaluate_occlusion_run(scen, run_dir, METRICS_CFG)["run"]
+    assert "versions" in run and "git_dirty" in run and run["tracks_sha256"] is None

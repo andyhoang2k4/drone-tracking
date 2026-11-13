@@ -141,6 +141,8 @@ python scripts/run_occlusion_ablation.py --group dev --tag 001 \
     --detector yolo11=<yolo11 best.pt> --detector yolo26=<yolo26 best.pt> --device 0
 # -> experiments/<detector>_botsort[_mm]_occl_dev_001/{config.yaml,metrics.json}
 #    + experiments/<detector>_botsort_mm_occl_dev_001/ablation_vs_<baseline>.json
+# Commit: index.json cua nhom kich ban, config.yaml, metrics.json gop,
+# ablation_vs_*.json. Gitignore: anh/manifest kich ban, experiments/**/scenarios/.
 # Nhom heldout CHI chay sau khi da chot tham so Motion Memory tren dev.
 
 # imgsz: --imgsz > detector.imgsz trong experiments/<id>/config.yaml >

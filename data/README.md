@@ -36,8 +36,14 @@ Moi kich ban `occlusion_test_scenarios/<nhom>/<sequence>__t<id>__d<thoi luong>__
 `images/` (frame bi che ghi lai, frame khac hardlink tu anh goc),
 `annotations.txt` (annotation VisDrone cua cua so, danh so lai tu 1),
 `manifest.json` (GT bbox cua muc tieu o MOI frame, khoang frame bi che, kieu
-che, seed, sequence nguon). Cung config + seed -> cung kich ban. Thu muc nay bi
-gitignore (ca anh lan manifest).
+che, seed, sequence nguon). Cung config + seed -> cung kich ban.
+
+Commit gi: **chi `occlusion_test_scenarios/<nhom>/index.json`** (danh sach kich
+ban, sequence, seed, `config_sha256`). Anh, `manifest.json`, `annotations.txt`
+cua tung kich ban bi gitignore - sinh lai duoc tu config da commit + dataset
+VisDrone (sinh xac dinh). `config_sha256` tinh tren noi dung da bo ky tu CR nen
+khong phu thuoc line ending (Windows/Linux). index.json khong ghi danh sach
+kich ban "bo qua vi da co" nen chay lai khong tao diff.
 
 - Nhom **dev** (VisDrone val): duoc dung de tinh chinh tham so Motion Memory.
 - Nhom **heldout** (VisDrone test-dev): KHONG dung de tinh chinh; chi chay sau

@@ -373,3 +373,14 @@ def test_existing_scenarios_skipped_after_line_ending_change(tmp_path, raw):
     path.write_bytes(lf_bytes.replace(b"\n", b"\r\n"))
     second = generate_group(load_scenario_config(path), "dev")
     assert first["scenarios"] and sorted(second["skipped_existing"]) == sorted(first["scenarios"])
+
+
+def test_index_file_stable_across_reruns(tmp_path, raw):
+    """index.json duoc commit: chay lai (bo qua kich ban da co) khong lam doi file."""
+    cfg, first, out = generate(tmp_path, raw)
+    index_path = out / "dev" / "index.json"
+    before = index_path.read_bytes()
+    assert "skipped_existing" not in json.loads(before)
+    second = generate_group(cfg, "dev")
+    assert second["skipped_existing"]  # gia tri tra ve van bao kich ban bi bo qua
+    assert index_path.read_bytes() == before

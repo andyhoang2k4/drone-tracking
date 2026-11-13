@@ -901,6 +901,8 @@ def evaluate_occlusion_run(
             "motion_memory_config": (context.get("motion_memory") or {}).get("config"),
             "git_commit": (context.get("git") or {}).get("commit"),
             "tracks_sha256": (context.get("replay") or {}).get("tracks_sha256"),
+            "git_dirty": (context.get("git") or {}).get("dirty"),
+            "versions": context.get("versions"),
         },
         "target_selection": selection,
         "metrics_config": dict(metrics_config),
@@ -943,6 +945,18 @@ def _pool(items: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
     }
 
 
+def _provenance(items: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
+    """Commit git / version package cua cac lan chay duoc gop (CLAUDE.md muc 14)."""
+    runs = [it["run"] for it in items]
+    versions = {json.dumps(r.get("versions"), sort_keys=True) for r in runs}
+    return {
+        "git_commits": sorted({str(r.get("git_commit")) for r in runs}),
+        "git_dirty_runs": sum(1 for r in runs if r.get("git_dirty")),
+        "versions": [json.loads(v) for v in sorted(versions)],
+        "tracks_logs": sum(1 for r in runs if r.get("tracks_sha256")),
+    }
+
+
 def aggregate_occlusion_metrics(items: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
     """Gop nhieu kich ban cua CUNG mot cau hinh chay, CUNG mot nhom."""
     if not items:
@@ -977,6 +991,8 @@ def aggregate_occlusion_metrics(items: Sequence[Mapping[str, Any]]) -> dict[str,
         "run": {k: first["run"].get(k) for k in RUN_KEYS},
         "motion_memory_config": first["run"].get("motion_memory_config"),
         "metrics_config": first["metrics_config"],
+        # Metrics tung kich ban khong commit (.gitignore) -> giu nguon goc o ban gop.
+        "provenance": _provenance(items),
         "overall": _pool(items),
         "by_duration_frames": by("duration_frames"),
         "by_occluder": by("occluder"),

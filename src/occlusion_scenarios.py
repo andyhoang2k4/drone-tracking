@@ -546,7 +546,10 @@ def generate_group(
                     write_scenario(data, plan, duration, spec, cfg, group, out_dir)
     if not dry_run:
         group_dir.mkdir(parents=True, exist_ok=True)
-        (group_dir / INDEX_NAME).write_text(json.dumps(index, indent=2) + "\n", encoding="utf-8")
+        # index.json duoc commit: chi ghi phan xac dinh boi config (bo skipped_existing,
+        # von thay doi giua cac lan chay lai) de chay lai khong tao diff.
+        stored = {k: v for k, v in index.items() if k != "skipped_existing"}
+        (group_dir / INDEX_NAME).write_text(json.dumps(stored, indent=2) + "\n", encoding="utf-8")
     return index
 
 
