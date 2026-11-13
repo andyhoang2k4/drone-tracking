@@ -83,8 +83,8 @@ def test_full_cycle_runs_without_stub():
     memory = linear_memory(lost_timeout=3, reid_timeout_frames=4)
     states = [memory.update(None).state for _ in range(10)]
     assert states[:3] == [TrackState.LOST] * 3
-    assert states[3:8] == [TrackState.REIDENTIFYING] * 5
-    assert states[8:] == [TrackState.FAILED] * 2
+    assert states[3:7] == [TrackState.REIDENTIFYING] * 4
+    assert states[7:] == [TrackState.FAILED] * 3
 
 
 def test_independent_of_detector_confidence():

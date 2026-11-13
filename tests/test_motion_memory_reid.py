@@ -4,8 +4,9 @@ cac transition o frame bien (roadmap buoc 5). Du lieu gia lap, khong chay YOLO.
 Moc thoi gian voi lost_timeout_frames=L, reid_timeout_frames=R (k = so frame
 tu lan confirmed cuoi, frame_idx lien tuc):
     k = 1..L            LOST
-    k = L+1..L+1+R      REIDENTIFYING (R+1 frame, gom frame vao state)
-    k >= L+R+2          FAILED
+    k = L+1..L+R        REIDENTIFYING (dung R frame)
+    k >= L+R+1          FAILED
+Detection o frame k duoc xet neu output o frame k-1 chua phai FAILED.
 """
 
 from __future__ import annotations
@@ -64,8 +65,8 @@ def test_state_timeline_boundaries():
     memory = memory_missing(0)
     states = [memory.update(None).state for _ in range(L + R + 3)]
     assert states[:L] == [TrackState.LOST] * L
-    assert states[L:L + R + 1] == [TrackState.REIDENTIFYING] * (R + 1)
-    assert states[L + R + 1:] == [TrackState.FAILED] * 2
+    assert states[L:L + R] == [TrackState.REIDENTIFYING] * R
+    assert states[L + R:] == [TrackState.FAILED] * 3
 
 
 # ---------------- recover_reason ----------------
@@ -175,18 +176,18 @@ def test_reid_matched_flag_ignored_outside_reidentifying():
 
 
 def test_same_id_on_last_reidentifying_frame():
-    memory = memory_missing(L + R)  # frame REID thu R (con 1 frame REID nua)
+    memory = memory_missing(L + R - 1)  # frame REID thu R-1
     assert memory.state is TrackState.REIDENTIFYING
-    pred = memory.update(det(LAST_FRAME + L + R + 1))
+    pred = memory.update(det(LAST_FRAME + L + R))  # frame REID thu R (cuoi)
     assert pred.state is TrackState.TRACKING
     assert pred.recover_reason == RECOVER_SAME_ID
 
 
 def test_same_id_one_frame_too_late_stays_failed():
-    memory = memory_missing(L + R + 1)  # het REID o call nay
+    memory = memory_missing(L + R)  # frame REID cuoi cung
     assert memory.state is TrackState.REIDENTIFYING
     assert memory.update(None).state is TrackState.FAILED
-    assert memory.update(det(LAST_FRAME + L + R + 3)).state is TrackState.FAILED
+    assert memory.update(det(LAST_FRAME + L + R + 2)).state is TrackState.FAILED
 
 
 # ---------------- FAILED la trang thai cuoi ----------------

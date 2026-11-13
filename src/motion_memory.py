@@ -277,8 +277,10 @@ class MotionMemory:
         Hai moc timeout deu tinh tren frames_since_confirmed (k)::
 
             k <= L                 LOST            (L = lost_timeout_frames)
-            L < k <= L + 1 + R     REIDENTIFYING   (R = reid_timeout_frames)
-            k >  L + 1 + R         FAILED
+            L < k <= L + R         REIDENTIFYING   (R = reid_timeout_frames)
+            k >  L + R             FAILED
+
+        Tuc la LOST dai dung L frame va REIDENTIFYING dai dung R frame.
 
         Neu k nhay qua nhieu moc trong mot lan goi (bo frame), state di qua
         cac moc lien tiep ngay trong lan goi do.
@@ -434,7 +436,7 @@ class MotionMemory:
             self._transition(TrackState.REIDENTIFYING)
         if (
             self._state is TrackState.REIDENTIFYING
-            and k > cfg.lost_timeout_frames + 1 + cfg.reid_timeout_frames
+            and k > cfg.lost_timeout_frames + cfg.reid_timeout_frames
         ):
             self._transition(TrackState.FAILED)
 

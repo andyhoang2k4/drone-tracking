@@ -118,8 +118,9 @@ def test_reid_timeout_goes_failed(memory: StubMotionMemory) -> None:
         memory.update(None)
     assert memory.state is TrackState.REIDENTIFYING
 
-    # reid_timeout_frames=5
-    for _ in range(5):
+    # reid_timeout_frames=5: REIDENTIFYING dai dung 5 frame (frame vao state
+    # o tren + 4 frame nua)
+    for _ in range(4):
         assert memory.update(None).state is TrackState.REIDENTIFYING
 
     assert memory.update(None).state is TrackState.FAILED

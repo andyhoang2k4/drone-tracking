@@ -87,8 +87,8 @@ def test_skipped_calls_jump_straight_to_failed():
 def test_boundaries_measured_on_frame_idx():
     memory = tracked()
     assert memory.update(None, frame_idx=9 + L).state is TrackState.LOST
-    assert memory.update(None, frame_idx=9 + L + 1 + R).state is TrackState.REIDENTIFYING
-    assert memory.update(None, frame_idx=9 + L + 2 + R).state is TrackState.FAILED
+    assert memory.update(None, frame_idx=9 + L + R).state is TrackState.REIDENTIFYING
+    assert memory.update(None, frame_idx=9 + L + R + 1).state is TrackState.FAILED
 
 
 def test_recovery_after_jump_resets_counter():
