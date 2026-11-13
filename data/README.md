@@ -20,6 +20,34 @@ bounding box cho **toan bo sequence**, ke ca cac frame bi che khuat hoac
 nhieu (CLAUDE.md muc 12). Khong co ground truth o cac frame do thi khong
 tinh duoc "% frame du doan dung" va "sai so vi tri trong luc occlusion".
 
+### Sinh kich ban occlusion nhan tao (roadmap buoc 4)
+
+Quy tac co dinh trong `configs/occlusion_scenarios.yaml` (seed, quy tac chon
+muc tieu, thoi luong che, kieu che, nhom). Can VisDrone2019-MOT val + test-dev
+da giai nen o `data/raw/VisDrone2019-MOT/`.
+
+```bash
+python scripts/generate_occlusion_scenarios.py --group dev --dry-run   # liet ke
+python scripts/generate_occlusion_scenarios.py --group dev             # nhom dev (val)
+python scripts/generate_occlusion_scenarios.py --group heldout         # nhom giu rieng (test-dev)
+```
+
+Moi kich ban `occlusion_test_scenarios/<nhom>/<sequence>__t<id>__d<thoi luong>__<kieu che>/`:
+`images/` (frame bi che ghi lai, frame khac hardlink tu anh goc),
+`annotations.txt` (annotation VisDrone cua cua so, danh so lai tu 1),
+`manifest.json` (GT bbox cua muc tieu o MOI frame, khoang frame bi che, kieu
+che, seed, sequence nguon). Cung config + seed -> cung kich ban. Thu muc nay bi
+gitignore (ca anh lan manifest).
+
+- Nhom **dev** (VisDrone val): duoc dung de tinh chinh tham so Motion Memory.
+- Nhom **heldout** (VisDrone test-dev): KHONG dung de tinh chinh; chi chay sau
+  khi da chot tham so tren dev (CLAUDE.md muc 13).
+
+**Han che:** vat che nhan tao (khoi mau dac hoac nhieu, bam theo bbox GT cua
+muc tieu tung frame) KHONG giong che khuat that nhu cay hay cong trinh: khong
+co bien canh tu nhien, khong dung yen trong the gioi, va luon che dung muc
+tieu. Ket qua tren kich ban nay khong thay the danh gia tren che khuat that.
+
 ## Dataset yaml
 
 Copy `dataset.example.yaml` thanh `dataset.yaml` (bi gitignore) va sua duong
