@@ -57,7 +57,8 @@ khong sua ma nguon noi bo cua `ultralytics`.
 | `motion_memory.py` khop lai: gate chuyen dong trong LOST, dung ID cu trong REIDENTIFYING | Xong, unit test du lieu gia; **chua chay tren log that** |
 | `run_pipeline.py --motion-memory` (config, ung vien, theo ID moi) | Xong, test voi track gia (khong YOLO); **chua chay tren GPU / dataset that** |
 | `evaluate.py` precision/recall + ID switch tren ground truth VisDrone-MOT | Xong (unit test du lieu gia, chua chay tren log that) |
-| `evaluate.py` metric occlusion | **Chua implement** (roadmap buoc 4) |
+| Kich ban occlusion nhan tao (`src/occlusion_scenarios.py`) | Xong, test voi anh/annotation gia; **chua sinh tren VisDrone that** |
+| `evaluate.py` metric occlusion + gop + so sanh ablation | Xong, test voi log/manifest gia; **chua chay tren log that** |
 
 ## Cai dat
 
@@ -160,6 +161,45 @@ python -m pytest tests/ -q
 Precision va recall bao cao **song song**. Moi kich ban occlusion bat buoc co
 ground truth cho toan bo sequence. Danh gia Motion Memory bat buoc co ablation
 co/khong Motion Memory tren cung detector + tracker. Chi tiet: CLAUDE.md muc 12.
+
+### Do do kich ban occlusion (`python -m src.evaluate occlusion|aggregate|compare`)
+
+Dinh nghia + nguong co dinh trong `configs/occlusion_metrics.yaml` (commit
+truoc moi lan chay that). Moi kich ban co GT bbox o MOI frame (manifest), khoang
+che la mot doan lien tuc [a, b]:
+
+- **Output** o frame k: co Motion Memory -> `predicted_bbox` (TRACKING = bbox
+  tracker, LOST = bbox ngoai suy, REIDENTIFYING/FAILED = khong co); baseline ->
+  `tracker_bbox` cua track ID muc tieu. **Output xac nhan** = den tu detection
+  (Motion Memory: state TRACKING; baseline: luon).
+- **Du doan dung**: co output va IoU(output, GT) >= `correct_iou` (0.5).
+- **% frame du doan dung** = so frame dung trong [a, b] / (b - a + 1).
+- **Tracking gap dai nhat**: doan dai nhat cac frame lien tiep khong du doan
+  dung, tu frame dung dau tien den het (chua tung dung = ca kich ban).
+- **Re-ID thanh cong**: sau b co `reid_min_consecutive_frames` (3) frame lien
+  tiep du doan dung VA la output xac nhan - ngoai suy trung vi tri KHONG tinh.
+  **Time-to-reidentify** = frame dau cua doan do - b (>= 1).
+- **Sai so vi tri trong luc che**: trung binh khoang cach tam tren cac frame
+  trong [a, b] co output (kem so frame co output).
+- Ghi them: bat lai bang track ID moi hay cu, `recover_reason`, muc tieu co duoc
+  bat truoc khi che khong (kich ban khong bat duoc van tinh vao tong).
+- **Gop nhieu kich ban**: cong gop tu so/mau so (khong trung binh cac ti le),
+  tach theo thoi luong che va kieu che; tu choi gop khac nhom (dev/heldout),
+  khac tham so chay, hoac thieu kich ban so voi `index.json` (tru
+  `--allow-incomplete`, danh dau incomplete).
+- **So sanh ablation** (`compare`): tu choi neu bat ky cap kich ban nao khac
+  weights/source/tracker/conf/imgsz/classes (`ablation_mismatches`).
+
+```bash
+python -m src.evaluate occlusion --scenario-dir data/occlusion_test_scenarios/dev/<ten> \
+    --run-dir experiments/<exp_id>/scenarios/<ten>
+python -m src.evaluate aggregate --exp-dir experiments/<exp_id> \
+    --index data/occlusion_test_scenarios/dev/index.json
+python -m src.evaluate compare --baseline experiments/<base_id> \
+    --memory experiments/<mm_id> --output experiments/<mm_id>/ablation_vs_<base_id>.json
+```
+
+Han che: vat che nhan tao khong giong che khuat that - xem `data/README.md`.
 
 ### Quy tac ground truth VisDrone2019-MOT (`src/evaluate.py`)
 

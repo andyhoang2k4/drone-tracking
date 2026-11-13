@@ -15,6 +15,9 @@
 #     - lan chay KHONG Motion Memory (baseline): tracker_bbox cua track ID muc
 #       tieu (khong co khi BoT-SORT khong xuat ID do).
 #   "du doan dung" o frame k: co output VA IoU(output, GT_k) >= correct_iou.
+#   "output xac nhan" o frame k: output den tu detection cua tracker, KHONG phai
+#     ngoai suy - lan chay co Motion Memory: state TRACKING; baseline: luon la
+#     detection (tracker_bbox).
 #
 #   occlusion_frames            = b - a + 1 (thoi luong che).
 #   correct_prediction_ratio    = so frame du doan dung trong [a, b] / occlusion_frames.
@@ -22,8 +25,10 @@
 #                                 dung, tinh tu frame du doan dung dau tien den
 #                                 het kich ban; chua tung dung -> = N (ca kich ban).
 #   reidentified                = ton tai k > b sao cho k .. k+M-1 deu du doan
-#                                 dung (M = reid_min_consecutive_frames, nam trong
-#                                 kich ban).
+#                                 dung VA la output xac nhan (M =
+#                                 reid_min_consecutive_frames, nam trong kich
+#                                 ban). Bbox ngoai suy (LOST) khong tinh la bat
+#                                 lai, du trung vi tri.
 #   time_to_reidentify_frames   = k_min - b voi k_min nho nhat o tren (>= 1;
 #                                 1 = dung ngay frame dau sau khi het che);
 #                                 null neu khong reidentified.
