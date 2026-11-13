@@ -37,12 +37,16 @@ common:
 # Tham so inference/danh gia dung CHUNG cho ca hai model (detect/track/
 # run_pipeline va src/evaluate.py doc tu day). KHONG dat trong `common` vi
 # `common` duoc truyen thang vao model.train().
-# conf: nguong confidence detection. 0.25 = gia tri dang dung truoc day.
-# Luu y: ultralytics model.track() tu dung 0.1 khi khong truyen conf, de vong
-# match thu hai cua BoT-SORT (track_low_thresh: 0.1) nhan duoc detection
-# diem thap; voi conf 0.25 vong do khong co detection nao duoi 0.25.
+# conf: nguong confidence detection truoc tracker.
+# 2026-11-13: chot 0.1 (truoc la 0.25) = bang track_low_thresh trong
+# configs/botsort.yaml, de vong match thu hai cua BoT-SORT nhan duoc detection
+# diem thap (0.1..0.25); cung la gia tri ultralytics model.track() tu dung khi
+# khong truyen conf. Tao track moi van can >= new_track_thresh (0.25), vong
+# match dau van can >= track_high_thresh (0.25).
+# Luu y: src/detect.py (chi detect, khong track) cung dung conf nay -> log
+# detect se co ca box diem thap 0.1..0.25.
 inference:
-  conf: 0.25
+  conf: 0.1
 
 # Thu muc chua weights pretrained da tai san (gitignore). Train dung
 # <weights_dir>/<weights> neu co; khong co thi Ultralytics tu tai theo ten.
