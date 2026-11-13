@@ -30,7 +30,8 @@ khong sua ma nguon noi bo cua `ultralytics`.
 | Duong dan | Noi dung |
 |---|---|
 | `configs/botsort.yaml` | Config BoT-SORT rieng cua project (Re-ID mac dinh TAT) |
-| `configs/train_config.yaml` | Config train dung chung cho YOLO11-seg va YOLO26-seg |
+| `configs/train_config.yaml` | Config train dung chung cho YOLO11-seg va YOLO26-seg; `inference.conf` dung chung khi inference/danh gia |
+| `configs/eval_visdrone.yaml` | Danh gia VisDrone2019-MOT (val/test-dev): nguong IoU/IoA, class-aware, warmup FPS |
 | `src/detect.py` | Chay detection, log JSONL |
 | `src/track.py` | Chay detection + BoT-SORT, log JSONL |
 | `src/motion_memory.py` | Motion memory / temporal propagation |
@@ -119,6 +120,19 @@ python scripts/run_pipeline.py --weights <best.pt> \
 # conf: co dinh o inference.conf trong configs/train_config.yaml, dung chung
 # cho YOLO11/YOLO26; --conf chi de thu nghiem (nguon ghi vao meta, va
 # src/evaluate.py tu choi log co conf khac config).
+
+# Danh gia tracking tren VisDrone2019-MOT (MOT sequence MOT lan, val hoac test-dev).
+# --source cua track phai la thu muc anh cua DUNG sequence do.
+SEQ=uav0000086_00000_v
+python -m src.track --weights <best.pt> \
+    --source data/raw/VisDrone2019-MOT/VisDrone2019-MOT-val/sequences/$SEQ \
+    --output experiments/<exp_id>/logs/val/$SEQ.jsonl
+python -m src.evaluate --split val --sequence $SEQ \
+    --log experiments/<exp_id>/logs/val/$SEQ.jsonl \
+    --output experiments/<exp_id>/metrics/val/$SEQ.json
+# metrics JSON: precision + recall (song song), TP/FP/FN, so box bi loai do vung
+# bo qua, ID switch, FPS/latency thuc do (bo fps_warmup_frames frame dau).
+# Tu choi: log thieu frame, log khong co `path`, sai sequence, conf khac config.
 
 # Train (chi tren Ubuntu/cloud)
 bash scripts/train_yolo11.sh yolo11_baseline_001

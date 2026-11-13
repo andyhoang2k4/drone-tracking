@@ -1,0 +1,18 @@
+# Danh gia tracking tren VisDrone2019-MOT co ground truth (roadmap buoc 3).
+# Doc boi `python -m src.evaluate` - moi lan chay danh gia MOT sequence.
+#
+# conf KHONG nam o day: co dinh o inference.conf trong configs/train_config.yaml
+# (dung chung YOLO11/YOLO26); evaluate tu choi log co conf khac gia tri do.
+# Quy tac ground truth / vung bi bo qua: docstring src/evaluate.py va README.
+
+raw_root: data/raw/VisDrone2019-MOT
+splits:                       # ten split CLI -> thu muc chua annotations/ + sequences/
+  val: VisDrone2019-MOT-val
+  test-dev: VisDrone2019-MOT-test-dev
+
+dataset_config: configs/dataset_visdrone.yaml   # lay category_map (1..10 -> 0..9)
+
+iou_threshold: 0.5            # IoU toi thieu de ghep prediction voi GT
+ignore_ioa: 0.5               # IoA toi thieu voi vung bi bo qua -> loai box
+class_aware: true             # chi ghep khi cung class
+fps_warmup_frames: 10         # bo N frame dau (setup model + warmup) khi tinh FPS
