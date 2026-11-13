@@ -22,13 +22,19 @@ from __future__ import annotations
 import argparse
 import sys
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from src.motion_memory import MotionMemory, MotionMemoryConfig, TrackState  # noqa: E402
+from src.motion_memory import (  # noqa: E402
+    BBox,
+    MotionMemory,
+    MotionPrediction,
+    Observation,
+    TrackState,
+)
 from src.track import (  # noqa: E402
     DEFAULT_TRACKER_CONFIG,
     iter_tracks,
@@ -40,6 +46,10 @@ from src.utils.inference_settings import (  # noqa: E402
     resolve_imgsz,
 )
 from src.utils.logging_utils import JsonlLogger, write_json  # noqa: E402
+from src.utils.motion_memory_settings import (  # noqa: E402
+    DEFAULT_MOTION_MEMORY_CONFIG,
+    resolve_motion_memory_config,
+)
 from src.utils.run_context import build_run_context  # noqa: E402
 
 
@@ -80,8 +90,24 @@ def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
         action="store_true",
         help="Bat Motion Memory (mac dinh TAT - de chay nhanh baseline)",
     )
-    parser.add_argument("--lost-timeout-frames", type=int, default=15)
-    parser.add_argument("--reid-timeout-frames", type=int, default=45)
+    parser.add_argument(
+        "--motion-memory-config",
+        type=Path,
+        default=DEFAULT_MOTION_MEMORY_CONFIG,
+        help="File tham so Motion Memory (khoa motion_memory)",
+    )
+    parser.add_argument(
+        "--lost-timeout-frames",
+        type=int,
+        default=None,
+        help="Bo trong = lay tu --motion-memory-config",
+    )
+    parser.add_argument(
+        "--reid-timeout-frames",
+        type=int,
+        default=None,
+        help="Bo trong = lay tu --motion-memory-config",
+    )
     parser.add_argument(
         "--output-root",
         type=Path,
@@ -89,6 +115,108 @@ def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
         help="Thu muc goc chua cac experiment",
     )
     return parser.parse_args(argv)
+
+
+def record_to_candidates(record: dict[str, Any]) -> list[Observation]:
+    """Doi cac track BoT-SORT xuat ra trong mot frame sang Observation.
+
+    Chi lay track da co track_id (track chua duoc gan ID bi bo). Giu class
+    (cls) cho gating cung class va detector conf RIENG (khong gop, muc 6).
+    """
+    candidates: list[Observation] = []
+    for track in record["tracks"]:
+        if track.get("track_id") is None:
+            continue
+        x1, y1, x2, y2 = track["bbox"]
+        cls = track.get("cls")
+        candidates.append(
+            Observation(
+                bbox=BBox(float(x1), float(y1), float(x2), float(y2)),
+                frame_idx=record["frame_idx"],
+                track_id=int(track["track_id"]),
+                detector_confidence=track.get("conf"),
+                cls=int(cls) if cls is not None else None,
+            )
+        )
+    return candidates
+
+
+class MotionMemoryRunner:
+    """Noi output BoT-SORT cua tung frame vao MotionMemory (post-processing).
+
+    - Chua goi memory cho den frame dau tien thay `initial_target_id`; truoc
+      do log state = null.
+    - Sau do muc tieu = MotionPrediction.track_id (doi khi khop lai bang ID moi).
+    - Truyen frame_idx that va moi track khac lam ung vien.
+    """
+
+    def __init__(self, memory: MotionMemory, initial_target_id: int) -> None:
+        self.memory = memory
+        self.initial_target_id = initial_target_id
+        self.started = False
+
+    @property
+    def target_id(self) -> Optional[int]:
+        if not self.started:
+            return self.initial_target_id
+        return self.memory.track_id
+
+    def step(self, record: dict[str, Any]) -> dict[str, Any]:
+        candidates = record_to_candidates(record)
+        target_id = self.target_id
+        observation = next((c for c in candidates if c.track_id == target_id), None)
+
+        if not self.started and observation is None:
+            return self._entry(record, candidates, None)
+
+        self.started = True
+        others = [c for c in candidates if c is not observation]
+        prediction = self.memory.update(observation, others, frame_idx=record["frame_idx"])
+        return self._entry(record, candidates, prediction)
+
+    @staticmethod
+    def _entry(
+        record: dict[str, Any],
+        candidates: list[Observation],
+        prediction: Optional[MotionPrediction],
+    ) -> dict[str, Any]:
+        # detected/tracker_bbox: track BoT-SORT cua ID muc tieu HIEN TAI (sau update).
+        target_id = prediction.track_id if prediction is not None else None
+        target = next((c for c in candidates if c.track_id == target_id), None)
+        entry: dict[str, Any] = {
+            "frame_idx": record["frame_idx"],
+            "detected": target is not None,
+            "tracker_bbox": list(target.bbox.as_tuple()) if target else None,
+            # Giu RIENG - khong gop voi motion confidence (muc 6)
+            "detector_confidence": target.detector_confidence if target else None,
+        }
+        if prediction is None:  # chua thay muc tieu lan nao
+            entry.update(
+                {
+                    "state": None,
+                    "predicted_bbox": None,
+                    "motion_confidence": None,
+                    "frames_since_confirmed": None,
+                    "track_id": None,
+                    "recover_reason": None,
+                    "gate_candidates_passed": None,
+                }
+            )
+            return entry
+        entry.update(
+            {
+                "state": prediction.state.value,
+                "predicted_bbox": (
+                    list(prediction.bbox.as_tuple()) if prediction.bbox else None
+                ),
+                "motion_confidence": prediction.confidence,
+                "frames_since_confirmed": prediction.frames_since_confirmed,
+                "track_id": prediction.track_id,
+                "recover_reason": prediction.recover_reason,
+                "gate_candidates_passed": prediction.gate_candidates_passed,
+            }
+        )
+        return entry
 
 
 def main(argv: Optional[list[str]] = None) -> int:
@@ -118,6 +246,19 @@ def main(argv: Optional[list[str]] = None) -> int:
     if conf_choice.conf != conf_choice.config_conf:
         print(f"CANH BAO: conf khac inference.conf={conf_choice.config_conf} trong config")
 
+    runner: Optional[MotionMemoryRunner] = None
+    mm_context: Optional[dict] = None
+    if args.motion_memory:
+        mm_choice = resolve_motion_memory_config(
+            {
+                "lost_timeout_frames": args.lost_timeout_frames,
+                "reid_timeout_frames": args.reid_timeout_frames,
+            },
+            args.motion_memory_config,
+        )
+        mm_context = mm_choice.as_dict()
+        runner = MotionMemoryRunner(MotionMemory(mm_choice.config), args.target_track_id)
+
     # Metadata tai hien experiment (CLAUDE.md muc 14)
     write_json(
         exp_dir / "run_context.json",
@@ -126,18 +267,13 @@ def main(argv: Optional[list[str]] = None) -> int:
             config=vars(args),
             dataset=args.source,
             repo_root=REPO_ROOT,
-            extra={"inference": {**choice.as_dict(), **conf_choice.as_dict()}},
+            extra={
+                "inference": {**choice.as_dict(), **conf_choice.as_dict()},
+                # Gia tri da resolve (CLI > file > dataclass); None khi tat.
+                "motion_memory": mm_context,
+            },
         ),
     )
-
-    memory: Optional[MotionMemory] = None
-    if args.motion_memory:
-        memory = MotionMemory(
-            MotionMemoryConfig(
-                lost_timeout_frames=args.lost_timeout_frames,
-                reid_timeout_frames=args.reid_timeout_frames,
-            )
-        )
 
     frames = 0
     with JsonlLogger(log_path) as log:
@@ -151,6 +287,11 @@ def main(argv: Optional[list[str]] = None) -> int:
             classes=args.classes,
         ):
             frames += 1
+            if runner is not None:
+                log.write(runner.step(record))
+                continue
+
+            # Baseline (khong Motion Memory): giu nguyen hanh vi cu.
             observation = track_record_to_observation(record, args.target_track_id)
 
             entry: dict = {
@@ -165,24 +306,9 @@ def main(argv: Optional[list[str]] = None) -> int:
                 ),
             }
 
-            if memory is not None:
-                prediction = memory.update(observation)
-                entry.update(
-                    {
-                        "state": prediction.state.value,
-                        "predicted_bbox": (
-                            list(prediction.bbox.as_tuple())
-                            if prediction.bbox
-                            else None
-                        ),
-                        "motion_confidence": prediction.confidence,
-                        "frames_since_confirmed": prediction.frames_since_confirmed,
-                    }
-                )
-            else:
-                entry["state"] = (
-                    TrackState.TRACKING.value if observation else TrackState.LOST.value
-                )
+            entry["state"] = (
+                TrackState.TRACKING.value if observation else TrackState.LOST.value
+            )
 
             log.write(entry)
 
