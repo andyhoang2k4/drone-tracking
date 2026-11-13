@@ -1,0 +1,82 @@
+# Kich ban occlusion nhan tao co ground truth (roadmap buoc 4).
+# Doc boi src/occlusion_scenarios.py (scripts/generate_occlusion_scenarios.py).
+#
+# FILE NAY CO DINH TRUOC KHI CO BAT KY LAN CHAY THAT NAO (CLAUDE.md muc 13).
+# Doi quy tac chon muc tieu / thoi luong / kieu che / seed / nhom sau khi da
+# xem ket qua -> tang `version` va tao experiment moi, KHONG sua tai cho.
+#
+# Y tuong: lay sequence VisDrone2019-MOT co annotation day du, che nhan tao
+# len bbox GT cua MOT muc tieu trong mot khoang frame -> vi tri dung cua muc
+# tieu biet o MOI frame, ke ca frame bi che.
+#
+# HAN CHE (ghi ca trong README): vat che nhan tao (khoi mau / nhieu bam theo
+# bbox GT) KHONG giong che khuat that (cay, cong trinh): khong co bien canh tu
+# nhien, khong dung yen trong the gioi, va bam dung theo muc tieu.
+
+version: 1
+seed: 20261113
+
+raw_root: data/raw/VisDrone2019-MOT
+dataset_config: configs/dataset_visdrone.yaml    # category_map: category VisDrone -> class 0..9
+output_root: data/occlusion_test_scenarios
+
+# Chia nhom theo SEQUENCE (khong chia theo frame). Hai nhom lay tu hai split
+# chinh thuc khac nhau cua VisDrone nen khong trung sequence (generator kiem tra).
+#   dev     : DUOC dung de tinh chinh tham so Motion Memory.
+#   heldout : KHONG duoc dung de tinh chinh; chi chay mot lan sau khi da chot
+#             tham so tren dev.
+groups:
+  dev:
+    split_dir: VisDrone2019-MOT-val
+  heldout:
+    split_dir: VisDrone2019-MOT-test-dev
+
+# Quy tac chon muc tieu (xac dinh, ap dung tren TOAN BO cua so kich ban:
+# pre_occlusion_frames + thoi luong che dai nhat + post_occlusion_frames).
+# Moi frame trong cua so, muc tieu phai:
+#   - co box GT hop le (score=1, category trong category_map) - khong mat frame nao;
+#   - thuoc `classes`;
+#   - canh ngan nhat cua bbox >= min_box_side_px;
+#   - truncation <= max_gt_truncation, occlusion (co cua VisDrone) <= max_gt_occlusion;
+#   - IoA (dien tich giao / dien tich bbox muc tieu) voi moi vung bi bo qua
+#     <= max_ignore_ioa (0.0 = khong chong lan vung bi bo qua chut nao).
+target_rules:
+  classes: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]   # ca 10 class dang dung (dataset version 2)
+  min_box_side_px: 16
+  max_gt_truncation: 0       # VisDrone: 0 = khong bi cat boi bien anh
+  max_gt_occlusion: 1        # VisDrone: 0 = khong che, 1 = che 1-50%, 2 = che 50-100%
+  max_ignore_ioa: 0.0
+  pre_occlusion_frames: 30   # muc tieu hien ro truoc khi che (chon muc tieu + uoc luong van toc)
+  post_occlusion_frames: 60  # muc tieu hien ro sau khi che (thoi gian de bat lai)
+  targets_per_sequence: 2    # chon ngau nhien co seed trong cac muc tieu hop le
+
+# Thoi luong che (frame). Moi muc tieu duoc sinh du cac muc nay.
+durations_frames: [5, 15, 30, 60]
+
+# Vi tri bat dau che: mot vi tri DUY NHAT cho moi muc tieu, dung chung cho moi
+# thoi luong va moi kieu che, chon ngau nhien co seed (seed, sequence, target)
+# trong cac vi tri ma cua so cua thoi luong DAI NHAT hop le.
+start_policy: seeded_shared
+
+# Kieu che: coverage x texture.
+#   full    : che kin bbox GT mo rong margin_ratio moi phia.
+#   partial : che mot dai doc bang partial_fraction be rong bbox (mo rong
+#             margin_ratio theo chieu doc), tu canh trai hoac phai (chon co seed
+#             theo kich ban).
+#   solid   : mau dac solid_color_bgr.
+#   noise   : nhieu deu 0..255 moi pixel, moi frame (seed theo kich ban).
+occluders:
+  - {name: full_solid, coverage: full, texture: solid}
+  - {name: full_noise, coverage: full, texture: noise}
+  - {name: partial_solid, coverage: partial, texture: solid}
+  - {name: partial_noise, coverage: partial, texture: noise}
+occluder_params:
+  margin_ratio: 0.15
+  partial_fraction: 0.6
+  solid_color_bgr: [114, 114, 114]
+
+# Anh dau ra: frame khong bi che duoc hardlink tu anh goc (copy neu khong
+# hardlink duoc); frame bi che ghi lai voi dinh dang duoi day.
+image:
+  format: jpg
+  jpeg_quality: 95
