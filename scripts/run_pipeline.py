@@ -13,8 +13,12 @@ Vi du::
     # Ablation: + Motion Memory
     python scripts/run_pipeline.py ... --motion-memory
 
-LUU Y: `--motion-memory` hien se loi NotImplementedError ngay khi muc tieu
-bi mat, vi phan ngoai suy chuyen dong chua duoc viet (roadmap buoc 5).
+Tham so Motion Memory: CLI (--lost-timeout-frames, --reid-timeout-frames) >
+--motion-memory-config (mac dinh configs/motion_memory.yaml) > mac dinh
+MotionMemoryConfig; gia tri da resolve ghi vao run_context.json.
+
+Khi KHONG bat --motion-memory, log giu nguyen nhu truoc (baseline). BoT-SORT
+duoc goi giong het o hai che do - Motion Memory chi la post-processing.
 """
 
 from __future__ import annotations

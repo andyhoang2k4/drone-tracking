@@ -8,9 +8,10 @@ rồi biến thành lệnh bay gửi tới PX4. Khi lên drone thật: PX4 chạ
 ## Liên hệ với code có sẵn
 
 - `TargetState` chính là `TrackState` của `src/motion_memory.py` (không định nghĩa trùng).
-- `motion_memory.py` hiện là khung: phần ngoại suy vị trí chưa implement (roadmap bước 5), gọi khi LOST sẽ `NotImplementedError`.
-  Vì vậy `target_manager.py` có ngoại suy tâm ảnh đơn giản riêng để lái drone. Đó **không phải** motion memory và không dùng cho đánh giá
-  (CLAUDE.md mục 12). Khi bước 5 xong, thay bằng `MotionMemory` qua cùng interface `update(detections, t) -> TargetEstimate | None`.
+- `motion_memory.py` đã có ngoại suy vị trí, prediction confidence và khớp lại (roadmap bước 5; mới kiểm chứng bằng unit test dữ liệu giả).
+  `target_manager.py` VẪN dùng ngoại suy tâm ảnh đơn giản riêng để lái drone (tính theo giây). Đó **không phải** motion memory và không
+  dùng cho đánh giá (CLAUDE.md mục 12). Chưa thay bằng `MotionMemory`: interface của `MotionMemory` tính theo frame
+  (`update(observation, candidates, frame_idx=...)`), cần một adapter trong `src/sim/` nếu muốn dùng chung.
 - `src/track.py::iter_tracks` chạy theo cả nguồn video. Mô phỏng cần suy luận từng khung hình do Gazebo đẩy sang, nên `adapters.py`
   gọi `model.track(frame, persist=True, ...)` mỗi frame. Nếu sau này `track.py` có hàm theo từng frame, hãy chuyển adapter sang dùng nó.
 

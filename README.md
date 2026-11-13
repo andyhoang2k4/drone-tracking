@@ -31,12 +31,13 @@ khong sua ma nguon noi bo cua `ultralytics`.
 |---|---|
 | `configs/botsort.yaml` | Config BoT-SORT rieng cua project (Re-ID mac dinh TAT) |
 | `configs/train_config.yaml` | Config train dung chung cho YOLO11-seg va YOLO26-seg; `inference.conf` dung chung khi inference/danh gia |
+| `configs/motion_memory.yaml` | Tham so Motion Memory (gia tri khoi dau chua tinh chinh; CLI > file > mac dinh dataclass) |
 | `configs/eval_visdrone.yaml` | Danh gia VisDrone2019-MOT (val/test-dev): nguong IoU/IoA, class-aware, warmup FPS |
 | `src/detect.py` | Chay detection, log JSONL |
 | `src/track.py` | Chay detection + BoT-SORT, log JSONL |
 | `src/motion_memory.py` | Motion memory / temporal propagation |
 | `src/evaluate.py` | Metric danh gia (detection, tracking, occlusion) |
-| `src/utils/` | Logger JSONL, thu thap metadata tai hien experiment |
+| `src/utils/` | Logger JSONL, thu thap metadata tai hien experiment, resolve tham so inference/Motion Memory |
 | `scripts/train_yolo11.sh`, `train_yolo26.sh` | Train - **chi chay tren Ubuntu/cloud** |
 | `scripts/run_pipeline.py` | Pipeline day du, co co `--motion-memory` cho ablation |
 | `scripts/prepare_visdrone.py` | Chuyen VisDrone2019-MOT sang dinh dang Ultralytics (giai doan A, 10 class) |
@@ -51,8 +52,10 @@ khong sua ma nguon noi bo cua `ultralytics`.
 |---|---|
 | Khung thu muc, config, logging, metadata experiment | Xong |
 | `detect.py`, `track.py`, `run_pipeline.py` | Smoke test CPU qua voi yolo11n-seg/yolo26n-seg pretrained (ultralytics 8.4.174), **chua chay tren GPU / dataset that** |
-| `motion_memory.py` state machine | Xong, co unit test |
-| `motion_memory.py` ngoai suy vi tri + prediction confidence | **Chua implement** (roadmap buoc 5) |
+| `motion_memory.py` state machine (LOST dung L frame, REIDENTIFYING dung R frame, dem theo `frame_idx`) | Xong, unit test du lieu gia |
+| `motion_memory.py` ngoai suy vi tri + prediction confidence | Xong, unit test du lieu gia; **chua chay tren log that** |
+| `motion_memory.py` khop lai: gate chuyen dong trong LOST, dung ID cu trong REIDENTIFYING | Xong, unit test du lieu gia; **chua chay tren log that** |
+| `run_pipeline.py --motion-memory` (config, ung vien, theo ID moi) | Xong, test voi track gia (khong YOLO); **chua chay tren GPU / dataset that** |
 | `evaluate.py` precision/recall + ID switch tren ground truth VisDrone-MOT | Xong (unit test du lieu gia, chua chay tren log that) |
 | `evaluate.py` metric occlusion | **Chua implement** (roadmap buoc 4) |
 
@@ -109,10 +112,18 @@ python -m src.track --weights <best.pt> --source data/raw/clip01.mp4 \
     --tracker configs/botsort.yaml \
     --output experiments/<exp_id>/logs/track.jsonl
 
-# Pipeline day du (baseline, chua co Motion Memory)
+# Pipeline day du: baseline (YOLO + BoT-SORT) va ablation (+ Motion Memory)
 python scripts/run_pipeline.py --weights <best.pt> \
     --source data/occlusion_test_scenarios/scn01.mp4 \
     --experiment-id <exp_id> --target-track-id 1
+python scripts/run_pipeline.py ... --motion-memory \
+    [--motion-memory-config configs/motion_memory.yaml] \
+    [--lost-timeout-frames N] [--reid-timeout-frames N]
+# Tham so Motion Memory: CLI > configs/motion_memory.yaml > mac dinh dataclass;
+# gia tri da dung ghi vao run_context.json (khoa "motion_memory").
+# Log moi frame (khi bat): state (null truoc khi thay muc tieu), predicted_bbox,
+# motion_confidence (RIENG, khong gop voi detector_confidence), track_id (doi
+# khi khop lai bang ID moi), recover_reason, gate_candidates_passed.
 
 # imgsz: --imgsz > detector.imgsz trong experiments/<id>/config.yaml >
 # run_context.json canh weights > configs/train_config.yaml. Gia tri da dung
