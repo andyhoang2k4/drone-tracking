@@ -52,7 +52,8 @@ khong sua ma nguon noi bo cua `ultralytics`.
 | `detect.py`, `track.py`, `run_pipeline.py` | Smoke test CPU qua voi yolo11n-seg/yolo26n-seg pretrained (ultralytics 8.4.174), **chua chay tren GPU / dataset that** |
 | `motion_memory.py` state machine | Xong, co unit test |
 | `motion_memory.py` ngoai suy vi tri + prediction confidence | **Chua implement** (roadmap buoc 5) |
-| `evaluate.py` cac ham tinh metric | **Chua implement** - cho chot dinh dang ground truth (roadmap buoc 4) |
+| `evaluate.py` precision/recall + ID switch tren ground truth VisDrone-MOT | Xong (unit test du lieu gia, chua chay tren log that) |
+| `evaluate.py` metric occlusion | **Chua implement** (roadmap buoc 4) |
 
 ## Cai dat
 
@@ -134,3 +135,17 @@ python -m pytest tests/ -q
 Precision va recall bao cao **song song**. Moi kich ban occlusion bat buoc co
 ground truth cho toan bo sequence. Danh gia Motion Memory bat buoc co ablation
 co/khong Motion Memory tren cung detector + tracker. Chi tiet: CLAUDE.md muc 12.
+
+### Quy tac ground truth VisDrone2019-MOT (`src/evaluate.py`)
+
+1. GT hop le: `score=1` va category 1..10 (map sang class 0..9 theo
+   `configs/dataset_visdrone.yaml`). Con lai la **vung bi bo qua**: `score=0`,
+   category 0 (ignored region), category ngoai map (vd 11 "others").
+2. Moi frame, truoc khi ghep cap: prediction co IoA (dien tich giao / dien tich
+   prediction) >= `ignore_ioa` (mac dinh 0.5) voi mot vung bi bo qua bi **loai**
+   (khong TP, khong FP). GT hop le nam trong vung bi bo qua (IoA theo dien tich
+   GT >= `ignore_ioa`) cung bi loai (khong FN).
+3. Ghep cap tham lam theo IoU giam dan, IoU >= `iou_threshold` (0.5), cung
+   class neu `class_aware`.
+4. ID switch: cung mot `target_id` GT duoc ghep voi track ID khac lan ghep truoc
+   (tinh ca khi co khoang mat o giua).
