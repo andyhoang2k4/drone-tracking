@@ -6,11 +6,11 @@ Xem CLAUDE.md muc 5 va muc 6.
 
 Pham vi: chi lam viec tren BOUNDING BOX, khong phai segmentation mask.
 
-Trang thai file: KHUNG (scaffold).
+Trang thai file (roadmap buoc 5, dang lam):
     - State machine theo bang transition o CLAUDE.md muc 6: DA implement.
-    - Thuat toan ngoai suy vi tri (`_extrapolate`) va prediction confidence:
-      CHUA implement (roadmap buoc 5). Goi khi dang LOST se raise
-      NotImplementedError.
+    - Ngoai suy vi tri (`_extrapolate`): DA implement - van toc khong doi co
+      suy giam, uoc luong bang hoi quy tuyen tinh tam bbox theo frame_idx.
+    - Prediction confidence: CHUA implement (raise NotImplementedError).
 """
 
 from __future__ import annotations
@@ -92,11 +92,56 @@ class MotionMemoryConfig:
         So frame toi da o state REIDENTIFYING truoc khi chuyen sang FAILED.
     history_size:
         So observation gan nhat duoc giu lai de uoc luong chuyen dong.
+    velocity_window_frames:
+        Cua so uoc luong van toc, tinh theo FRAME (khong theo so observation):
+        chi dung observation co frame_idx > frame_idx_cuoi - window. Sau mot
+        khoang mat dai, observation cu roi khoi cua so nen khong tron chuyen
+        dong cu vao van toc moi.
+    min_history:
+        So observation toi thieu trong cua so de uoc luong van toc. It hon
+        -> gia dinh dung yen (van toc 0).
+    velocity_decay:
+        He so suy giam van toc moi frame du doan, trong (0, 1]. Van toc o
+        frame du doan thu i la v * decay**(i-1) -> do doi bi chan boi
+        v / (1 - decay) khi decay < 1. 1.0 = van toc khong doi.
+    min_speed_ratio:
+        Nguong toc do toi thieu, TI LE theo kich thuoc bbox cuoi
+        ((w + h) / 2) moi frame. Toc do nho hon -> coi la dung yen (loc jitter
+        cua bbox), khong ngoai suy.
+
+    Cac gia tri mac dinh la gia tri khoi dau CHUA tinh chinh.
     """
 
     lost_timeout_frames: int = 15
     reid_timeout_frames: int = 45
     history_size: int = 30
+    velocity_window_frames: int = 8
+    min_history: int = 3
+    velocity_decay: float = 0.95
+    min_speed_ratio: float = 0.02
+
+    def __post_init__(self) -> None:
+        if self.lost_timeout_frames < 1 or self.reid_timeout_frames < 1:
+            raise ValueError("lost_timeout_frames va reid_timeout_frames phai >= 1")
+        if self.history_size < 2:
+            raise ValueError("history_size phai >= 2")
+        if self.velocity_window_frames < 2:
+            raise ValueError("velocity_window_frames phai >= 2")
+        if not 2 <= self.min_history <= self.history_size:
+            raise ValueError("min_history phai trong [2, history_size]")
+        if not 0.0 < self.velocity_decay <= 1.0:
+            raise ValueError("velocity_decay phai trong (0, 1]")
+        if self.min_speed_ratio < 0.0:
+            raise ValueError("min_speed_ratio phai >= 0")
+
+
+@dataclass(frozen=True)
+class VelocityFit:
+    """Ket qua uoc luong van toc tam bbox (pixel/frame)."""
+
+    vx: float
+    vy: float
+    n_samples: int  # so observation trong cua so da dung
 
 
 class MotionMemory:
@@ -172,6 +217,8 @@ class MotionMemory:
 
         if self._state is TrackState.LOST:
             bbox = self._extrapolate(self._frames_since_confirmed)
+            if bbox is None:  # chua co observation nao -> khong co gi de du doan
+                return self._emit(bbox=None, confidence=0.0)
             return self._emit(bbox=bbox, confidence=self._prediction_confidence())
 
         # REIDENTIFYING / FAILED: ngoai suy chuyen dong khong con dang tin,
@@ -233,13 +280,71 @@ class MotionMemory:
             "Prediction confidence chua implement - roadmap buoc 5."
         )
 
-    def _extrapolate(self, frames_ahead: int) -> Optional[BBox]:
-        """Ngoai suy bbox tu lich su chuyen dong gan nhat.
+    def _window(self) -> list[Observation]:
+        """Observation nam trong cua so van toc (theo frame_idx)."""
+        if not self._history:
+            return []
+        last_frame = self._history[-1].frame_idx
+        start = last_frame - self.config.velocity_window_frames
+        return [obs for obs in self._history if obs.frame_idx > start]
 
-        CHUA IMPLEMENT - noi dung chinh cua roadmap buoc 5 (CLAUDE.md muc 16).
-        Input co san: `self._history` (cac Observation confirmed gan nhat, kem
-        frame_idx/timestamp) va `frames_ahead`.
+    def _fit_velocity(self) -> VelocityFit:
+        """Uoc luong van toc tam bbox bang hoi quy tuyen tinh theo frame_idx.
+
+        Truc x la frame_idx that nen khoang trong (frame bi mat giua cac
+        observation) duoc tinh dung. Tra ve van toc 0 khi:
+            - it hon `min_history` observation trong cua so,
+            - cac observation trung frame_idx (khong xac dinh duoc slope),
+            - toc do < min_speed_ratio * kich thuoc bbox cuoi (dung yen/jitter).
         """
-        raise NotImplementedError(
-            "Temporal propagation chua implement - roadmap buoc 5."
-        )
+        window = self._window()
+        n = len(window)
+        if n < self.config.min_history:
+            return VelocityFit(0.0, 0.0, n)
+
+        ts = [float(obs.frame_idx) for obs in window]
+        xs = [obs.bbox.center[0] for obs in window]
+        ys = [obs.bbox.center[1] for obs in window]
+        mean_t = sum(ts) / n
+        mean_x = sum(xs) / n
+        mean_y = sum(ys) / n
+        denom = sum((t - mean_t) ** 2 for t in ts)
+        if denom <= 0.0:
+            return VelocityFit(0.0, 0.0, n)
+        vx = sum((t - mean_t) * (x - mean_x) for t, x in zip(ts, xs)) / denom
+        vy = sum((t - mean_t) * (y - mean_y) for t, y in zip(ts, ys)) / denom
+
+        last = window[-1].bbox
+        scale = (last.width + last.height) / 2.0
+        speed = (vx * vx + vy * vy) ** 0.5
+        if scale <= 0.0 or speed < self.config.min_speed_ratio * scale:
+            return VelocityFit(0.0, 0.0, n)
+        return VelocityFit(vx, vy, n)
+
+    def _extrapolate(self, frames_ahead: int) -> Optional[BBox]:
+        """Ngoai suy bbox `frames_ahead` frame sau observation confirmed cuoi.
+
+        Mo hinh: van toc khong doi co suy giam tren TAM bbox, giu nguyen kich
+        thuoc bbox cuoi. Do doi sau k frame::
+
+            d = v * (1 - decay**k) / (1 - decay)   (decay < 1)
+            d = v * k                              (decay == 1)
+
+        Tra ve None neu history rong. Khong bu chuyen dong camera (homography
+        CMC nam trong BoT-SORT) va khong clamp vao khung anh.
+        """
+        if not self._history:
+            return None
+        last = self._history[-1].bbox
+        k = max(0, frames_ahead)
+        fit = self._fit_velocity()
+
+        decay = self.config.velocity_decay
+        if decay >= 1.0:
+            gain = float(k)
+        else:
+            gain = (1.0 - decay**k) / (1.0 - decay)
+
+        dx = fit.vx * gain
+        dy = fit.vy * gain
+        return BBox(last.x1 + dx, last.y1 + dy, last.x2 + dx, last.y2 + dy)
