@@ -10,7 +10,9 @@ Trang thai file (roadmap buoc 5, dang lam):
     - State machine theo bang transition o CLAUDE.md muc 6: DA implement.
     - Ngoai suy vi tri (`_extrapolate`): DA implement - van toc khong doi co
       suy giam, uoc luong bang hoi quy tuyen tinh tam bbox theo frame_idx.
-    - Prediction confidence: CHUA implement (raise NotImplementedError).
+    - Prediction confidence: DA implement - giam tuyen tinh theo motion
+      horizon, nhan he so chat luong mo hinh (du lieu + residual).
+    - Chua co: khop lai bang gating, chinh sach REIDENTIFYING (commit sau).
 """
 
 from __future__ import annotations
@@ -142,6 +144,9 @@ class VelocityFit:
     vx: float
     vy: float
     n_samples: int  # so observation trong cua so da dung
+    # RMS khoang cach (pixel) giua tam quan sat va duong hoi quy - do lech
+    # cua chuyen dong so voi mo hinh thang deu. 0 khi chua du observation.
+    residual_rms: float = 0.0
 
 
 class MotionMemory:
@@ -272,13 +277,33 @@ class MotionMemory:
         )
 
     def _prediction_confidence(self) -> float:
-        """Do tin cay cua DU DOAN (khong phai cua detection).
+        """Do tin cay cua DU DOAN trong LOST (khong phai cua detection).
 
-        Khong duoc cong/gop voi detector confidence (CLAUDE.md muc 6).
+        KHONG doc va KHONG gop voi detector_confidence (CLAUDE.md muc 6).
+
+            conf = q * (1 - k / (lost_timeout_frames + 1))
+            q    = h / (1 + residual_rms / scale)
+            h    = min(1, n_samples / min_history)
+
+        k = so frame tu lan confirmed cuoi; scale = (w + h) / 2 cua bbox cuoi.
+        Thanh phan thoi gian gan voi motion horizon: giam tuyen tinh, van > 0
+        o frame LOST cuoi cung. q phat khi it du lieu (h) hoac chuyen dong lech
+        nhieu khoi duong thang (residual lon so voi kich thuoc bbox).
+        Ket qua trong [0, 1] va khong tang theo k.
         """
-        raise NotImplementedError(
-            "Prediction confidence chua implement - roadmap buoc 5."
-        )
+        if not self._history:
+            return 0.0
+        k = self._frames_since_confirmed
+        time_factor = max(0.0, 1.0 - k / (self.config.lost_timeout_frames + 1))
+
+        last = self._history[-1].bbox
+        scale = (last.width + last.height) / 2.0
+        if scale <= 0.0:
+            return 0.0
+        fit = self._fit_velocity()
+        history_factor = min(1.0, fit.n_samples / self.config.min_history)
+        quality = history_factor / (1.0 + fit.residual_rms / scale)
+        return min(1.0, max(0.0, quality * time_factor))
 
     def _window(self) -> list[Observation]:
         """Observation nam trong cua so van toc (theo frame_idx)."""
@@ -310,16 +335,25 @@ class MotionMemory:
         mean_y = sum(ys) / n
         denom = sum((t - mean_t) ** 2 for t in ts)
         if denom <= 0.0:
-            return VelocityFit(0.0, 0.0, n)
-        vx = sum((t - mean_t) * (x - mean_x) for t, x in zip(ts, xs)) / denom
-        vy = sum((t - mean_t) * (y - mean_y) for t, y in zip(ts, ys)) / denom
+            vx = vy = 0.0
+        else:
+            vx = sum((t - mean_t) * (x - mean_x) for t, x in zip(ts, xs)) / denom
+            vy = sum((t - mean_t) * (y - mean_y) for t, y in zip(ts, ys)) / denom
+
+        # Residual tinh tren duong hoi quy (truoc khi snap ve dung yen).
+        sq = 0.0
+        for t, x, y in zip(ts, xs, ys):
+            fx = mean_x + vx * (t - mean_t)
+            fy = mean_y + vy * (t - mean_t)
+            sq += (x - fx) ** 2 + (y - fy) ** 2
+        residual = (sq / n) ** 0.5
 
         last = window[-1].bbox
         scale = (last.width + last.height) / 2.0
         speed = (vx * vx + vy * vy) ** 0.5
         if scale <= 0.0 or speed < self.config.min_speed_ratio * scale:
-            return VelocityFit(0.0, 0.0, n)
-        return VelocityFit(vx, vy, n)
+            return VelocityFit(0.0, 0.0, n, residual)
+        return VelocityFit(vx, vy, n, residual)
 
     def _extrapolate(self, frames_ahead: int) -> Optional[BBox]:
         """Ngoai suy bbox `frames_ahead` frame sau observation confirmed cuoi.
