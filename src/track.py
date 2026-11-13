@@ -14,8 +14,9 @@ Vi du::
 from __future__ import annotations
 
 import argparse
+import time
 from pathlib import Path
-from typing import Any, Iterator, Optional
+from typing import Any, Iterable, Iterator, Optional
 
 from src.motion_memory import BBox, Observation
 from src.utils.inference_settings import (
@@ -27,6 +28,50 @@ from src.utils.inference_settings import (
 from src.utils.logging_utils import JsonlLogger
 
 DEFAULT_TRACKER_CONFIG = Path("configs/botsort.yaml")
+
+
+def timed_iter(iterable: Iterable[Any]) -> Iterator[tuple[Any, float]]:
+    """Yield (item, ms): thoi gian thuc (perf_counter) cho moi lan lay item.
+
+    Voi stream cua ultralytics, ms = tu luc xin frame toi luc nhan Results:
+    doc anh + preprocess + inference + postprocess + cap nhat tracker. Khong
+    tinh thoi gian xu ly cua phia goi (ghi log...). Frame dau gom ca setup
+    model + warmup -> khi tinh FPS nen bo vai frame dau.
+    """
+    iterator = iter(iterable)
+    while True:
+        start = time.perf_counter()
+        try:
+            item = next(iterator)
+        except StopIteration:
+            return
+        yield item, (time.perf_counter() - start) * 1000.0
+
+
+def result_to_record(frame_idx: int, result: Any, frame_time_ms: Optional[float]) -> dict[str, Any]:
+    """Doi mot Results cua ultralytics sang ban ghi log (xem iter_tracks)."""
+    tracks: list[dict[str, Any]] = []
+    boxes = getattr(result, "boxes", None)
+    if boxes is not None:
+        for box in boxes:
+            track_id = box.id
+            tracks.append(
+                {
+                    "track_id": int(track_id[0]) if track_id is not None else None,
+                    "bbox": [float(v) for v in box.xyxy[0].tolist()],
+                    "conf": float(box.conf[0]),
+                    "cls": int(box.cls[0]),
+                }
+            )
+    path = getattr(result, "path", None)
+    speed = getattr(result, "speed", None) or {}
+    return {
+        "frame_idx": frame_idx,
+        "path": str(path) if path is not None else None,
+        "frame_time_ms": frame_time_ms,
+        "speed_ms": {k: (float(v) if v is not None else None) for k, v in speed.items()},
+        "tracks": tracks,
+    }
 
 
 def iter_tracks(
@@ -46,10 +91,18 @@ def iter_tracks(
 
         {
             "frame_idx": 0,
+            "path": ".../sequences/uav0000086_00000_v/0000001.jpg",
+            "frame_time_ms": 41.7,   # thoi gian thuc, gom ca tracker (timed_iter)
+            "speed_ms": {"preprocess": .., "inference": .., "postprocess": ..},
             "tracks": [
                 {"track_id": 1, "bbox": [x1, y1, x2, y2], "conf": 0.9, "cls": 0}
             ],
         }
+
+    `path`: anh/video nguon cua frame (dung de ghep voi ground truth theo so
+    frame, khong dua vao frame_idx). `speed_ms`: so do cua ultralytics, KHONG
+    gom thoi gian tracker. Tren CUDA, ultralytics doc anh song song (prefetch)
+    nen frame_time_ms phan anh thong luong thuc te.
 
     Track nao chua duoc tracker gan ID (track_id None) van duoc giu lai de
     buoc sau tu quyet dinh co dung hay khong.
@@ -69,21 +122,8 @@ def iter_tracks(
         verbose=False,
     )
 
-    for frame_idx, result in enumerate(stream):
-        tracks: list[dict[str, Any]] = []
-        boxes = getattr(result, "boxes", None)
-        if boxes is not None:
-            for box in boxes:
-                track_id = box.id
-                tracks.append(
-                    {
-                        "track_id": int(track_id[0]) if track_id is not None else None,
-                        "bbox": [float(v) for v in box.xyxy[0].tolist()],
-                        "conf": float(box.conf[0]),
-                        "cls": int(box.cls[0]),
-                    }
-                )
-        yield {"frame_idx": frame_idx, "tracks": tracks}
+    for frame_idx, (result, frame_time_ms) in enumerate(timed_iter(stream)):
+        yield result_to_record(frame_idx, result, frame_time_ms)
 
 
 def track_record_to_observation(
