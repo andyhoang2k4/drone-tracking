@@ -89,6 +89,10 @@ class MotionPrediction:
         "same_id"      - dung ID tracker cu quay lai,
         "motion_gate"  - ung vien ID khac qua gate chuyen dong (chi trong LOST),
         "reid_matched" - phia goi bao Re-ID match (update(reid_matched=True)).
+    gate_candidates_passed: so ung vien (ID khac) qua gate chuyen dong o lan
+    goi nay; None neu gate KHONG duoc xet (khong o LOST, khong co ung vien
+    ID khac, hoac da khop bang dung ID). 1 khi khop bang motion_gate; 0 hoac
+    >= 2 (mo ho) khi van LOST.
     """
 
     bbox: Optional[BBox]
@@ -97,6 +101,7 @@ class MotionPrediction:
     state: TrackState
     track_id: Optional[int] = None
     recover_reason: Optional[str] = None
+    gate_candidates_passed: Optional[int] = None
 
 
 RECOVER_SAME_ID = "same_id"
@@ -311,23 +316,24 @@ class MotionMemory:
             return self._emit(observation.bbox, 1.0, reason)
 
         # Gating chuyen dong CHI trong LOST (con trong motion horizon).
+        gate_passed: Optional[int] = None
         if prev_state is TrackState.LOST and others:
-            match = self._gate(others)
+            match, gate_passed = self._gate(others)
             if match is not None:
                 self._accept(match)
-                return self._emit(match.bbox, 1.0, RECOVER_MOTION_GATE)
+                return self._emit(match.bbox, 1.0, RECOVER_MOTION_GATE, gate_passed)
 
         self._on_missing_detection(frame_idx)
 
         if self._state is TrackState.LOST:
             bbox = self._extrapolate(self._frames_since_confirmed)
             if bbox is None:  # chua co observation nao -> khong co gi de du doan
-                return self._emit(bbox=None, confidence=0.0)
-            return self._emit(bbox=bbox, confidence=self._prediction_confidence())
+                return self._emit(None, 0.0, None, gate_passed)
+            return self._emit(bbox, self._prediction_confidence(), None, gate_passed)
 
         # REIDENTIFYING / FAILED: ngoai suy chuyen dong khong con dang tin,
         # cho co che appearance-based Re-ID (xem CLAUDE.md muc 6).
-        return self._emit(bbox=None, confidence=0.0)
+        return self._emit(None, 0.0, None, gate_passed)
 
     def reset(self) -> None:
         """Xoa toan bo lich su, quay ve TRACKING."""
@@ -387,16 +393,21 @@ class MotionMemory:
     def _is_current_id(self, observation: Observation) -> bool:
         return observation.track_id is not None and observation.track_id == self._track_id
 
-    def _gate(self, candidates: Sequence[Observation]) -> Optional[Observation]:
-        """Khop lai bang chuyen dong; tra ve ung vien DUY NHAT qua gate, hoac None."""
+    def _gate(
+        self, candidates: Sequence[Observation]
+    ) -> tuple[Optional[Observation], int]:
+        """Khop lai bang chuyen dong.
+
+        Tra ve (ung vien DUY NHAT qua gate hoac None, so ung vien qua gate).
+        """
         if not self._history:
-            return None
+            return None, 0
         last_obs = self._history[-1]
         last = last_obs.bbox
         scale = (last.width + last.height) / 2.0
         last_area = last.width * last.height
         if scale <= 0.0 or last_area <= 0.0:
-            return None
+            return None, 0
         cfg = self.config
 
         passed: list[Observation] = []
@@ -417,7 +428,7 @@ class MotionMemory:
             close = ((cx - px) ** 2 + (cy - py) ** 2) ** 0.5 <= radius
             if close or _iou(predicted, cand.bbox) >= cfg.match_iou:
                 passed.append(cand)
-        return passed[0] if len(passed) == 1 else None
+        return (passed[0] if len(passed) == 1 else None), len(passed)
 
     def _on_missing_detection(self, frame_idx: Optional[int] = None) -> None:
         if frame_idx is not None and self._history:
@@ -448,6 +459,7 @@ class MotionMemory:
         bbox: Optional[BBox],
         confidence: float,
         recover_reason: Optional[str] = None,
+        gate_candidates_passed: Optional[int] = None,
     ) -> MotionPrediction:
         return MotionPrediction(
             bbox=bbox,
@@ -456,6 +468,7 @@ class MotionMemory:
             state=self._state,
             track_id=self._track_id,
             recover_reason=recover_reason,
+            gate_candidates_passed=gate_candidates_passed,
         )
 
     def _prediction_confidence(self) -> float:

@@ -207,3 +207,44 @@ def test_no_candidates_keeps_backward_compatible_behaviour(lost_memory: MotionMe
 def test_invalid_gate_config_rejected(overrides):
     with pytest.raises(ValueError):
         MotionMemoryConfig(**overrides)
+
+
+# ---------------- gate_candidates_passed ----------------
+
+
+def test_gate_count_none_when_gate_not_evaluated(lost_memory: MotionMemory):
+    assert lost_memory.update(None).gate_candidates_passed is None  # khong co ung vien
+
+
+def test_gate_count_zero_when_all_rejected(lost_memory: MotionMemory):
+    far = det(11, predicted_x(2) + 80.0, 200.0, track_id=7)
+    pred = lost_memory.update(None, candidates=[far])
+    assert pred.state is TrackState.LOST
+    assert pred.gate_candidates_passed == 0
+
+
+def test_gate_count_ambiguous(lost_memory: MotionMemory):
+    a = det(11, predicted_x(2) - 3.0, 200.0, track_id=7)
+    b = det(11, predicted_x(2) + 3.0, 200.0, track_id=8)
+    assert lost_memory.update(None, candidates=[a, b]).gate_candidates_passed == 2
+
+
+def test_gate_count_one_on_match(lost_memory: MotionMemory):
+    pred = lost_memory.update(None, candidates=[det(11, predicted_x(2), 200.0, track_id=7)])
+    assert pred.gate_candidates_passed == 1
+
+
+def test_gate_count_none_when_same_id_returns(lost_memory: MotionMemory):
+    pred = lost_memory.update(None, candidates=[det(11, 600.0, 50.0, track_id=1),
+                                               det(11, predicted_x(2), 200.0, track_id=7)])
+    assert pred.recover_reason == "same_id"
+    assert pred.gate_candidates_passed is None
+
+
+def test_gate_count_none_on_transition_frame():
+    memory = MotionMemory(MotionMemoryConfig(velocity_decay=1.0))
+    for i in range(10):
+        memory.update(det(i, 100.0 + 3.0 * i, 200.0, track_id=1))
+    pred = memory.update(None, candidates=[det(10, predicted_x(1), 200.0, track_id=7)])
+    assert pred.state is TrackState.LOST
+    assert pred.gate_candidates_passed is None
