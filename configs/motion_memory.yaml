@@ -1,0 +1,31 @@
+# Tham so Motion Memory (src/motion_memory.py, CLAUDE.md muc 6).
+#
+# Thu tu uu tien: CLI (--lost-timeout-frames, --reid-timeout-frames) > file nay
+# > mac dinh cua MotionMemoryConfig. Gia tri da resolve duoc ghi vao
+# experiments/<id>/run_context.json (khoa "motion_memory").
+#
+# TAT CA gia tri duoi day la GIA TRI KHOI DAU CHUA TINH CHINH (2026-11-13).
+# Chi duoc tinh chinh tren nhom kich ban DEV (configs/occlusion_scenarios.yaml),
+# KHONG tren nhom held-out (CLAUDE.md muc 13). Moi lan doi gia tri sau khi da
+# co ket qua -> tao experiment moi.
+#
+# Don vi: so frame; cac nguong khong gian la TI LE theo kich thuoc bbox
+# confirmed cuoi, scale = (w + h) / 2.
+
+motion_memory:
+  # --- state machine ---
+  lost_timeout_frames: 15     # LOST dai dung N frame (motion horizon), sau do REIDENTIFYING
+  reid_timeout_frames: 45     # REIDENTIFYING dai dung N frame, sau do FAILED
+  history_size: 30            # so observation confirmed giu lai
+
+  # --- ngoai suy chuyen dong (trong LOST) ---
+  velocity_window_frames: 8   # cua so uoc luong van toc, theo frame_idx
+  min_history: 3              # it hon -> gia dinh dung yen
+  velocity_decay: 0.95        # van toc giam theo decay**i moi frame du doan; 1.0 = khong giam
+  min_speed_ratio: 0.02       # toc do < ti le nay * scale (moi frame) -> coi la dung yen
+
+  # --- gating khop lai voi track ID moi (chi trong LOST) ---
+  match_iou: 0.3              # IoU voi predicted bbox >= nguong -> qua gate
+  match_center_ratio: 0.5     # HOAC khoang cach tam <= scale * ratio * (1 + growth * gap)
+  match_gate_growth: 0.1      # gap = chenh lech frame_idx tu lan confirmed cuoi
+  max_scale_change: 2.0       # ti le dien tich ung vien / bbox cuoi trong [1/x, x]
