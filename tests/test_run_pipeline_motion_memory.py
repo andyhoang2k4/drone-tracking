@@ -18,21 +18,22 @@ if str(REPO_ROOT) not in sys.path:
 import scripts.run_pipeline as rp  # noqa: E402
 
 # Chuoi track gia dung cho test hoi quy baseline (log mau ghi lai tu code
-# TRUOC khi noi Motion Memory, commit fb4cfc4).
+# TRUOC khi noi Motion Memory, commit fb4cfc4; them truong `path` khi them
+# kiem tra thu tu anh).
 BASELINE_RECORDS = [
-    {"frame_idx": 0, "tracks": [{"track_id": 2, "bbox": [50, 50, 60, 60], "conf": 0.5, "cls": 1}]},
-    {"frame_idx": 1, "tracks": [{"track_id": 1, "bbox": [0, 0, 10, 10], "conf": 0.9, "cls": 0},
+    {"frame_idx": 0, "path": "seq/0000001.jpg", "tracks": [{"track_id": 2, "bbox": [50, 50, 60, 60], "conf": 0.5, "cls": 1}]},
+    {"frame_idx": 1, "path": "seq/0000002.jpg", "tracks": [{"track_id": 1, "bbox": [0, 0, 10, 10], "conf": 0.9, "cls": 0},
                                 {"track_id": None, "bbox": [5, 5, 9, 9], "conf": 0.2, "cls": 0}]},
-    {"frame_idx": 2, "tracks": []},
-    {"frame_idx": 3, "tracks": [{"track_id": 7, "bbox": [3, 0, 13, 10], "conf": 0.8, "cls": 0}]},
-    {"frame_idx": 4, "tracks": [{"track_id": 1, "bbox": [4, 0, 14, 10], "conf": 0.7, "cls": 0}]},
+    {"frame_idx": 2, "path": "seq/0000003.jpg", "tracks": []},
+    {"frame_idx": 3, "path": "seq/0000004.jpg", "tracks": [{"track_id": 7, "bbox": [3, 0, 13, 10], "conf": 0.8, "cls": 0}]},
+    {"frame_idx": 4, "path": "seq/0000005.jpg", "tracks": [{"track_id": 1, "bbox": [4, 0, 14, 10], "conf": 0.7, "cls": 0}]},
 ]
 BASELINE_EXPECTED = [
-    {"frame_idx": 0, "detected": False, "tracker_bbox": None, "detector_confidence": None, "state": "LOST"},
-    {"frame_idx": 1, "detected": True, "tracker_bbox": [0, 0, 10, 10], "detector_confidence": 0.9, "state": "TRACKING"},
-    {"frame_idx": 2, "detected": False, "tracker_bbox": None, "detector_confidence": None, "state": "LOST"},
-    {"frame_idx": 3, "detected": False, "tracker_bbox": None, "detector_confidence": None, "state": "LOST"},
-    {"frame_idx": 4, "detected": True, "tracker_bbox": [4, 0, 14, 10], "detector_confidence": 0.7, "state": "TRACKING"},
+    {"frame_idx": 0, "path": "seq/0000001.jpg", "detected": False, "tracker_bbox": None, "detector_confidence": None, "state": "LOST"},
+    {"frame_idx": 1, "path": "seq/0000002.jpg", "detected": True, "tracker_bbox": [0, 0, 10, 10], "detector_confidence": 0.9, "state": "TRACKING"},
+    {"frame_idx": 2, "path": "seq/0000003.jpg", "detected": False, "tracker_bbox": None, "detector_confidence": None, "state": "LOST"},
+    {"frame_idx": 3, "path": "seq/0000004.jpg", "detected": False, "tracker_bbox": None, "detector_confidence": None, "state": "LOST"},
+    {"frame_idx": 4, "path": "seq/0000005.jpg", "detected": True, "tracker_bbox": [4, 0, 14, 10], "detector_confidence": 0.7, "state": "TRACKING"},
 ]
 
 

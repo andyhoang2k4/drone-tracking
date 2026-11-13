@@ -561,9 +561,53 @@ def occluded_flags(manifest: Mapping[str, Any]) -> list[bool]:
     return [bool(r["occluded"]) for r in rows]
 
 
+def scenario_image_names(scenario_dir: PathLike) -> list[str]:
+    """Ten file anh cua kich ban, sap xep theo ten (= thu tu frame vi ten co
+    so 0 dem dau 7 chu so)."""
+    images_dir = Path(scenario_dir) / IMAGES_DIR
+    if not images_dir.is_dir():
+        raise FileNotFoundError(f"Khong thay {images_dir}")
+    return sorted(p.name for p in images_dir.iterdir() if p.suffix.lower() in IMAGE_SUFFIXES)
+
+
+def frame_order_problems(
+    paths: Sequence[Optional[str]], scenario_dir: PathLike, max_report: int = 5
+) -> list[str]:
+    """So path anh theo thu tu frame_idx trong log voi danh sach ten anh da
+    sap xep cua kich ban. Rong = khop het (dung thu tu, khong thieu, khong thua).
+
+    Kiem tra ten file va thu muc cha (<kich ban>/images) cua tung path; khong
+    gia dinh path tuyet doi giong nhau giua cac may.
+    """
+    scenario_dir = Path(scenario_dir)
+    expected = scenario_image_names(scenario_dir)
+    problems: list[str] = []
+    if len(paths) != len(expected):
+        problems.append(f"log co {len(paths)} frame, thu muc anh co {len(expected)} anh")
+    want_parent = (scenario_dir.name, IMAGES_DIR)
+    bad = 0
+    for k, (path, name) in enumerate(zip(paths, expected)):
+        if path is None:
+            msg = f"frame_idx {k}: log khong co path (mong doi {name})"
+        else:
+            p = Path(str(path))
+            if p.name != name:
+                msg = f"frame_idx {k}: log la {p.name}, mong doi {name} (lech thu tu/thieu anh)"
+            elif tuple(p.parts[-3:-1]) != want_parent:
+                msg = f"frame_idx {k}: anh {path} khong thuoc {'/'.join(want_parent)}"
+            else:
+                continue
+        bad += 1
+        if bad <= max_report:
+            problems.append(msg)
+    if bad > max_report:
+        problems.append(f"... tong cong {bad} frame lech")
+    return problems
+
+
 __all__: Sequence[str] = [
     "ScenarioConfig", "ScenarioConfigError", "OccluderSpec", "TargetPlan", "load_scenario_config",
     "load_sequence", "valid_frames", "valid_starts", "plan_sequence", "occluder_box",
     "write_scenario", "generate_group", "scenario_name", "derived_seed", "load_manifest",
-    "manifest_ground_truth", "occluded_flags",
+    "manifest_ground_truth", "occluded_flags", "scenario_image_names", "frame_order_problems",
 ]

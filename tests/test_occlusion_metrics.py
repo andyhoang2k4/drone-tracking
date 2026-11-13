@@ -132,7 +132,9 @@ def gt_box(k: int) -> BBox:
 def make_scenario(root: Path, name: str, duration_label: int = 5, group: str = "dev",
                   occluder: str = "full_solid") -> Path:
     scen = root / group / name
-    scen.mkdir(parents=True)
+    (scen / "images").mkdir(parents=True)
+    for k in range(N):
+        (scen / "images" / f"{k + 1:07d}.jpg").write_bytes(b"")  # chi can ten file
     lines = []
     gt_rows = []
     for k in range(N):
@@ -156,7 +158,7 @@ def make_scenario(root: Path, name: str, duration_label: int = 5, group: str = "
     return scen
 
 
-def tracks_for(case: str):
+def tracks_for(case: str, scen: Path = Path("s")):
     """BoT-SORT gia: ID 1 thay o frame 0..5, mat 6..10, sau do tuy case."""
     def trk(tid, k):
         b = gt_box(k)
@@ -171,12 +173,13 @@ def tracks_for(case: str):
                 tracks.append(trk(2, k))
             elif case == "same_id":
                 tracks.append(trk(1, k))
-        records.append({"frame_idx": k, "tracks": tracks})
+        records.append({"frame_idx": k, "path": str(scen / "images" / f"{k + 1:07d}.jpg"),
+                        "tracks": tracks})
     return records
 
 
 def run_scenario(monkeypatch, scen: Path, exp_dir: Path, case: str, *extra: str) -> Path:
-    monkeypatch.setattr(rp, "iter_tracks", lambda w, s, **k: iter(tracks_for(case)))
+    monkeypatch.setattr(rp, "iter_tracks", lambda w, s, **k: iter(tracks_for(case, scen)))
     name = scen.name
     argv = ["--weights", "w.pt", "--source", str(scen / "images"), "--experiment-id", name,
             "--gt-target-id", str(GT_ID), "--gt-annotation", str(scen / "annotations.txt"),
@@ -359,3 +362,22 @@ def test_compare_refuses_mismatched_settings(tmp_path, monkeypatch):
 def test_old_cli_still_parses():
     with pytest.raises(SystemExit):
         ev.parse_args([])  # van can --log/--split/... nhu cu
+
+
+def test_run_rejects_wrong_image_order(tmp_path, monkeypatch):
+    scen = make_scenario(tmp_path / "scn", "s1")
+    run_dir = run_scenario(monkeypatch, scen, tmp_path / "e", "same_id")
+    log = run_dir / "logs" / "pipeline.jsonl"
+    rows = [json.loads(x) for x in log.read_text(encoding="utf-8").splitlines()]
+    rows[3]["path"], rows[4]["path"] = rows[4]["path"], rows[3]["path"]
+    log.write_text("".join(json.dumps(r) + "\n" for r in rows), encoding="utf-8")
+    with pytest.raises(EvaluationError, match="Thu tu anh"):
+        evaluate_occlusion_run(scen, run_dir, METRICS_CFG)
+
+
+def test_run_rejects_missing_image(tmp_path, monkeypatch):
+    scen = make_scenario(tmp_path / "scn", "s1")
+    run_dir = run_scenario(monkeypatch, scen, tmp_path / "e", "same_id")
+    (scen / "images" / "0000005.jpg").unlink()
+    with pytest.raises(EvaluationError, match="Thu tu anh"):
+        evaluate_occlusion_run(scen, run_dir, METRICS_CFG)

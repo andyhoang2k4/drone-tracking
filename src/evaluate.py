@@ -793,7 +793,12 @@ def evaluate_occlusion_run(
     metrics_config: Mapping[str, Any],
 ) -> dict[str, Any]:
     """Danh gia mot lan chay run_pipeline tren mot kich ban -> dict metrics."""
-    from src.occlusion_scenarios import load_manifest, manifest_ground_truth, occluded_flags
+    from src.occlusion_scenarios import (
+        frame_order_problems,
+        load_manifest,
+        manifest_ground_truth,
+        occluded_flags,
+    )
 
     scenario_dir, run_dir = Path(scenario_dir), Path(run_dir)
     manifest = load_manifest(scenario_dir)
@@ -825,6 +830,12 @@ def evaluate_occlusion_run(
     if len(rows) != int(manifest["frames"]):
         raise EvaluationError(
             f"Log co {len(rows)} frame, manifest co {manifest['frames']} - log chua chay het?"
+        )
+    order = frame_order_problems([r.get("path") for r in rows], scenario_dir)
+    if order:
+        raise EvaluationError(
+            "Thu tu anh trong log khong khop ten file da sap xep cua kich ban:\n  "
+            + "\n  ".join(order)
         )
     motion_memory = bool(config.get("motion_memory"))
     boxes, ids, confirmed = pipeline_outputs(rows, motion_memory, selection)

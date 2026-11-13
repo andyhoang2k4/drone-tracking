@@ -186,7 +186,7 @@ def test_pipeline_gt_target_baseline(tmp_path, monkeypatch):
     assert states[:3] == ["LOST"] * 3              # truoc khi chon
     assert states[3:10] == ["TRACKING"] * 7
     assert states[10:] == ["LOST"] * 6             # baseline khong theo ID 12
-    assert set(rows[0]) == {"frame_idx", "detected", "tracker_bbox", "detector_confidence", "state"}
+    assert set(rows[0]) == {"frame_idx", "path", "detected", "tracker_bbox", "detector_confidence", "state"}
 
 
 def test_pipeline_gt_target_with_memory_follows_new_id(tmp_path, monkeypatch):

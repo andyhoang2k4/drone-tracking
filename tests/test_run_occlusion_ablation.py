@@ -35,7 +35,9 @@ def make_group(root: Path, group: str = "dev", partial: bool = False) -> list[st
     for case in CASES:
         name = f"seqA__t{GT_ID}__d005__{case}"
         scen = root / group / name
-        scen.mkdir(parents=True)
+        (scen / "images").mkdir(parents=True)
+        for k in range(N):
+            (scen / "images" / f"{k + 1:07d}.jpg").write_bytes(b"")
         lines, rows = [], []
         for k in range(N):
             b = gt_box(k)
@@ -68,7 +70,7 @@ def fake_tracks(source: str):
         tid = 1 if k <= 5 else {"new_id": 2, "same_id": 1}.get(case) if k > OCC_HI else None
         if tid is not None:
             tracks.append({"track_id": tid, "bbox": list(gt_box(k).as_tuple()), "conf": 0.8, "cls": 3})
-        out.append({"frame_idx": k, "tracks": tracks})
+        out.append({"frame_idx": k, "path": str(Path(source) / f"{k + 1:07d}.jpg"), "tracks": tracks})
     return out
 
 

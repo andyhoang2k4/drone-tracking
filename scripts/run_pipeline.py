@@ -17,7 +17,8 @@ Tham so Motion Memory: CLI (--lost-timeout-frames, --reid-timeout-frames) >
 --motion-memory-config (mac dinh configs/motion_memory.yaml) > mac dinh
 MotionMemoryConfig; gia tri da resolve ghi vao run_context.json.
 
-Khi KHONG bat --motion-memory, log giu nguyen nhu truoc (baseline). BoT-SORT
+Khi KHONG bat --motion-memory, log giu nhu truoc (baseline), chi them truong
+`path` (anh nguon cua frame, de kiem tra thu tu anh). BoT-SORT
 duoc goi giong het o hai che do - Motion Memory chi la post-processing.
 """
 
@@ -260,6 +261,8 @@ class MotionMemoryRunner:
         target = next((c for c in candidates if c.track_id == target_id), None)
         entry: dict[str, Any] = {
             "frame_idx": record["frame_idx"],
+            # Anh nguon cua frame (kiem tra thu tu anh khi danh gia kich ban).
+            "path": record.get("path"),
             "detected": target is not None,
             "tracker_bbox": list(target.bbox.as_tuple()) if target else None,
             # Giu RIENG - khong gop voi motion confidence (muc 6)
@@ -382,6 +385,8 @@ def main(argv: Optional[list[str]] = None) -> int:
 
             entry: dict = {
                 "frame_idx": record["frame_idx"],
+                # Anh nguon cua frame (kiem tra thu tu anh khi danh gia kich ban).
+                "path": record.get("path"),
                 "detected": observation is not None,
                 "tracker_bbox": (
                     list(observation.bbox.as_tuple()) if observation else None
