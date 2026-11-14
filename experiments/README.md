@@ -88,8 +88,13 @@ ablation nguon (`source_tag`, vd `v2_001`), khong chay YOLO.
 | `motion_memory_tuning_dev/mm_configs/<id>.yaml` (tham so day du tung cau hinh) | commit |
 | `<det>_botsort_mm_occl_dev_tune_<id>/{config.yaml,metrics.json,ablation_vs_*.json}` | commit |
 | `<det>_botsort_mm_occl_dev_tune_<id>/scenarios/` | gitignore - sao luu |
-| `motion_memory_tuning_dev_tune_limit<N>/`, `*_tune_limit<N>_*` (`--limit-scenarios`, partial) | thu nghiem, khong dung de chon; giu lai neu da chay (khong xoa lich su) |
+| `motion_memory_tuning_dev_tune_limit<N>_run<k>/`, `*_tune_limit<N>_run<k>_*` (`--limit-scenarios`, partial; tag tu danh so, k nho nhat chua dung) | thu nghiem, khong dung de chon; giu lai (khong xoa lich su) |
+| `motion_memory_tuning_dev_tune_limit6/`, `*_tune_limit6_*` (tag dinh dang cu) | lan chay thu LOI tren cloud 2026-11-14 (moi replay bi tu choi vi source tuyet doi khac meta tuong doi) - giu nguyen, khong xoa; tag cu bi tu choi nen khong bi ghi tiep |
 
+- Tham so replay (`--source`, `--weights`) lay nguyen chuoi tu `tracks.meta.json` cua log tracker
+  nguon (run_pipeline va `evaluate compare` doi chieu voi chuoi do), khong tu dung tu `--scenario-root`.
+- Truoc moi vong: pre-flight (kiem tinh moi lenh replay bang `apply_replay_meta` + chay that 1 replay
+  moi detector vao thu muc tam); > 50% lenh cua mot dot loi cung thong bao -> dung som, in day du.
 - Luu MOI cau hinh, ke ca cau hinh xau; khong co vong 3, khong them luoi sau
   khi co ket qua.
 - Cau hinh `default` duoc chay lai cung code; summary ghi
