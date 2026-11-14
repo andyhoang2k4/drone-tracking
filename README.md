@@ -39,6 +39,7 @@ khong sua ma nguon noi bo cua `ultralytics`.
 | `configs/occlusion_metrics_v2.yaml` | Do do occlusion **v2** (mac dinh): chi tinh ti le tren kich ban da khoa truoc khi che, dem rieng kich ban chua khoa |
 | `configs/motion_memory_tuning_dev.yaml` | Quy tac tune Motion Memory tren dev **dang ky truoc** (luoi, diem, hop le, bien 0.01, toi da 2 vong) |
 | `configs/motion_memory_tuned.yaml` | (chi co khi tuning chon duoc cau hinh) tham so Motion Memory da tune - dung cho heldout |
+| `configs/heldout_report_plan.yaml` | Ke hoach bao cao heldout KHAI BAO TRUOC (5 cot, sha256 moi file, cot quyet dinh mm_anchor, quy tac, bootstrap, tai lap) |
 | `configs/motion_memory_anchor_dev.yaml` | Khai bao truoc danh gia anchor tren dev (bien the, hoi quy, quy tac quyet dinh, cam ket sau ket qua) |
 | `src/occlusion_scenarios.py` | Sinh kich ban occlusion co GT moi frame (v2: loc theo screening.json) |
 | `src/motion_memory_tuning.py` | Ham thuan chon cau hinh Motion Memory theo quy tac tuning (sinh luoi, diem, hop le, chon) |
@@ -53,6 +54,8 @@ khong sua ma nguon noi bo cua `ultralytics`.
 | `scripts/generate_occlusion_scenarios.py` | Sinh kich ban occlusion cho mot nhom (dev/heldout) |
 | `scripts/run_occlusion_ablation.py` | Chay ablation co/khong Motion Memory tren mot nhom kich ban, roi danh gia/gop/so sanh |
 | `scripts/tune_motion_memory.py` | Tune Motion Memory tren dev: replay song song log tracker cua ablation v2_001 (CPU), chon cau hinh theo quy tac; `--variant <file khai bao>` danh gia bien the co dinh (vd anchor) |
+| `scripts/report_heldout.py` | Bao cao heldout theo ke hoach (bang mo ta, cot quyet dinh DAT/KHONG DAT, bootstrap, phan loai frame) |
+| `src/occlusion_report.py`, `src/heldout_plan.py` | Ham thuan: box_precision, gop detector, bootstrap theo sequence; nap/kiem tra ke hoach heldout |
 | `scripts/diagnose_mm_hijack.py` | Chan doan mo ta (dev): frame bi che co box cua MM theo LOST / TRACKING ID goc / TRACKING ID khac |
 | `scripts/prepare_visdrone.py` | Chuyen VisDrone2019-MOT sang dinh dang Ultralytics (giai doan A, 10 class) |
 | `scripts/generate_masks.py` | Sinh mask polygon tu box bang SAM, fallback hinh chu nhat khi mask lech |
@@ -196,9 +199,18 @@ python scripts/diagnose_mm_hijack.py --experiment <exp MM> [...] --output experi
 # -> experiments/<detector>_botsort_mm_occl_dev_tune_<id cau hinh>/ (moi cau hinh, ke ca cau hinh xau)
 #    + experiments/motion_memory_tuning_dev/{config.yaml,summary.json,mm_configs/}
 # Ket luan co the la "giu cau hinh mac dinh" - ghi ro trong summary.json.
-# 5. Heldout (MOT lan, sau khi chot): run_occlusion_ablation.py --group heldout ...
-#    --motion-memory-config configs/motion_memory_tuned.yaml (neu tuning chon duoc;
-#    neu khong, de mac dinh configs/motion_memory.yaml).
+# 5. Heldout (MOT lan, theo configs/heldout_report_plan.yaml - commit TRUOC screening heldout):
+#    guard bat buoc --report-plan, sha256 khop, cay lam viec sach, tu choi neu da co metrics.
+python scripts/run_occlusion_ablation.py --group heldout --tag v2_001 \
+    --scenario-root data/occlusion_test_scenarios/v2 $DET --device 0 \
+    --report-plan configs/heldout_report_plan.yaml \
+    --motion-memory-config configs/motion_memory.yaml \
+    --extra-motion-memory-config tuned=configs/motion_memory_tuned.yaml \
+    --extra-motion-memory-config anchor=experiments/motion_memory_anchor_dev/mm_configs/anchor.yaml \
+    --extra-motion-memory-config anchor_lost25=experiments/motion_memory_anchor_dev/mm_configs/anchor_lost25.yaml
+#    (ngat giua chung: chay lai cung lenh + --resume-incomplete, chi khi chua co metrics gop)
+python scripts/report_heldout.py --plan configs/heldout_report_plan.yaml
+# -> experiments/heldout_report_v2_001/report.json
 
 # imgsz: --imgsz > detector.imgsz trong experiments/<id>/config.yaml >
 # run_context.json canh weights > configs/train_config.yaml. Gia tri da dung

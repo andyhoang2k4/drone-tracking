@@ -71,6 +71,9 @@ so lan chay co working tree dirty, version package cua cac lan chay) va
 kich ban) - nho backup ca thu muc truoc khi tat cloud neu can xem lai tung
 kich ban.
 
+Cot MM phu: `--extra-motion-memory-config ten=file` -> `<det>_botsort_mm_<ten>_occl_<nhom>_<tag>`
+(cung log tracker, compare rieng voi baseline).
+
 Nhom `dev` dung de tinh chinh tham so Motion Memory; nhom `heldout` chi chay
 MOT lan sau khi da chot tham so (doi tham so sau khi xem heldout -> tag moi va
 ghi ro trong README cua experiment).
@@ -124,3 +127,26 @@ Bien the: `default_regression` (hoi quy, phai trung `tune_default`), `anchor` (Q
 `summary.json`: `status` = complete | blocked_by_regression (default_regression lech
 tune_default -> DUNG, khong dien giai anchor) | not_available. Cot mo ta va `anchor_lost25`
 khong dung de chon cau hinh; chi vao heldout neu ke hoach heldout khai bao truoc.
+
+## Heldout (`configs/heldout_report_plan.yaml`)
+
+Ke hoach khai bao truoc (version 1): 5 cot cung log tracker - `no_mm`, `mm_default`,
+`mm_tuned`, `mm_anchor` (QUYET DINH, dung (i)-(iii) cua `configs/motion_memory_anchor_dev.yaml`),
+`mm_anchor_lost25` (mo ta). Guard cua runner (nhom heldout): `--report-plan` bat buoc, sha256
+moi file plan tham chieu, cot/metrics/kich ban khop plan, weights trung screening dev + heldout,
+cay lam viec sach, khong `--limit-scenarios`; da co `metrics.json` gop -> tu choi (tag moi +
+`--heldout-rerun-note`); dang do -> chi `--resume-incomplete` (ghi `heldout_resumes`). Heldout chi
+gop khi moi detector x cot du kich ban.
+
+Cay lam viec SACH (`src/utils/run_context.py` CLEAN_TREE_DEFINITION): `git status --porcelain
+--untracked-files=no` rong va moi file plan tham chieu da track trong HEAD; file untracked/ignored
+(output, du lieu) khong tinh. Luu y: truong `git.dirty` cu trong run_context/metrics tinh CA file
+untracked (vd config.yaml/metrics.json chinh lan chay vua ghi) nen cac lan chay dev deu ghi
+dirty=true - khong co nghia code bi sua.
+
+| Duong dan | Git |
+|---|---|
+| `<det>_botsort[_mm[_<cot phu>]]_occl_heldout_<tag>/{config.yaml,metrics.json,ablation_vs_*.json}` | commit |
+| `<det>_botsort_tracks_occl_heldout_<tag>/config.yaml` (moi truong may chay tracker) | commit |
+| `heldout_report_<tag>/report.json` (`scripts/report_heldout.py`) | commit |
+| `*_occl_heldout_<tag>/scenarios/` | gitignore - sao luu |
