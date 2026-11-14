@@ -39,6 +39,7 @@ khong sua ma nguon noi bo cua `ultralytics`.
 | `configs/occlusion_metrics_v2.yaml` | Do do occlusion **v2** (mac dinh): chi tinh ti le tren kich ban da khoa truoc khi che, dem rieng kich ban chua khoa |
 | `configs/motion_memory_tuning_dev.yaml` | Quy tac tune Motion Memory tren dev **dang ky truoc** (luoi, diem, hop le, bien 0.01, toi da 2 vong) |
 | `configs/motion_memory_tuned.yaml` | (chi co khi tuning chon duoc cau hinh) tham so Motion Memory da tune - dung cho heldout |
+| `configs/motion_memory_anchor_dev.yaml` | Khai bao truoc danh gia anchor tren dev (bien the, hoi quy, quy tac quyet dinh, cam ket sau ket qua) |
 | `src/occlusion_scenarios.py` | Sinh kich ban occlusion co GT moi frame (v2: loc theo screening.json) |
 | `src/motion_memory_tuning.py` | Ham thuan chon cau hinh Motion Memory theo quy tac tuning (sinh luoi, diem, hop le, chon) |
 | `src/occlusion_screening.py` | Screening khoa muc tieu tren clip sach truoc khi che (luat chon muc tieu that cua pipeline) |
@@ -51,7 +52,8 @@ khong sua ma nguon noi bo cua `ultralytics`.
 | `scripts/run_pipeline.py` | Pipeline day du, co co `--motion-memory` cho ablation |
 | `scripts/generate_occlusion_scenarios.py` | Sinh kich ban occlusion cho mot nhom (dev/heldout) |
 | `scripts/run_occlusion_ablation.py` | Chay ablation co/khong Motion Memory tren mot nhom kich ban, roi danh gia/gop/so sanh |
-| `scripts/tune_motion_memory.py` | Tune Motion Memory tren dev: replay song song log tracker cua ablation v2_001 (CPU), chon cau hinh theo quy tac |
+| `scripts/tune_motion_memory.py` | Tune Motion Memory tren dev: replay song song log tracker cua ablation v2_001 (CPU), chon cau hinh theo quy tac; `--variant <file khai bao>` danh gia bien the co dinh (vd anchor) |
+| `scripts/diagnose_mm_hijack.py` | Chan doan mo ta (dev): frame bi che co box cua MM theo LOST / TRACKING ID goc / TRACKING ID khac |
 | `scripts/prepare_visdrone.py` | Chuyen VisDrone2019-MOT sang dinh dang Ultralytics (giai doan A, 10 class) |
 | `scripts/generate_masks.py` | Sinh mask polygon tu box bang SAM, fallback hinh chu nhat khi mask lech |
 | `scripts/check_env.py` | Kiem tra Python, version package, CUDA, schema BoT-SORT, weight |
@@ -66,7 +68,8 @@ khong sua ma nguon noi bo cua `ultralytics`.
 | `detect.py`, `track.py`, `run_pipeline.py` | Smoke test CPU qua voi yolo11n-seg/yolo26n-seg pretrained (ultralytics 8.4.174), **chua chay tren GPU / dataset that** |
 | `motion_memory.py` state machine (LOST dung L frame, REIDENTIFYING dung R frame, dem theo `frame_idx`) | Xong, unit test du lieu gia |
 | `motion_memory.py` ngoai suy vi tri + prediction confidence | Xong, unit test du lieu gia; **chua chay tren log that** |
-| `motion_memory.py` khop lai: gate chuyen dong trong LOST, dung ID cu trong REIDENTIFYING | Xong, unit test du lieu gia; **chua chay tren log that** |
+| `motion_memory.py` khop lai: gate chuyen dong trong LOST, dung ID cu trong REIDENTIFYING | Xong, unit test du lieu gia; da chay replay dev v2_001 |
+| `motion_memory.py` anchor (`anchor_recovery`, mac dinh TAT): ghi nho ID goc khi motion_gate sang ID khac, quay ve khi ID goc xuat hien lai (moi state tru FAILED); quyet dinh B thanh "nhan lai ID hien tai hoac anchor, van khong dung gate" | Xong, unit test du lieu gia; **chua chay replay dev** |
 | `run_pipeline.py --motion-memory` (config, ung vien, theo ID moi) | Xong, test voi track gia (khong YOLO); **chua chay tren GPU / dataset that** |
 | `evaluate.py` precision/recall + ID switch tren ground truth VisDrone-MOT | Xong (unit test du lieu gia, chua chay tren log that) |
 | Kich ban occlusion nhan tao (`src/occlusion_scenarios.py`) | Xong, test voi anh/annotation gia; **chua sinh tren VisDrone that** |
@@ -137,7 +140,10 @@ python scripts/run_pipeline.py ... --motion-memory \
 # gia tri da dung ghi vao run_context.json (khoa "motion_memory").
 # Log moi frame (khi bat): state (null truoc khi thay muc tieu), predicted_bbox,
 # motion_confidence (RIENG, khong gop voi detector_confidence), track_id (doi
-# khi khop lai bang ID moi), recover_reason, gate_candidates_passed.
+# khi khop lai bang ID moi), recover_reason (same_id / motion_gate / reid_matched /
+# anchor_id - anchor_id chi khi anchor_recovery: true), gate_candidates_passed.
+# anchor_recovery (bool, mac dinh false; KHONG co trong configs/motion_memory.yaml
+# de giu sha256 file mac dinh/tuned): bat bang file config rieng.
 # Chon muc tieu theo ground truth thay vi --target-track-id:
 #   --gt-target-id <id> --gt-annotation <annotation VisDrone .txt> [--gt-first-frame 1]
 # (ghep GT voi track BoT-SORT bang IoU o frame dau muc tieu xuat hien; ket qua
@@ -180,6 +186,13 @@ python scripts/tune_motion_memory.py --round 1 --dry-run
 python scripts/tune_motion_memory.py --round 1 --jobs 16
 python scripts/tune_motion_memory.py --round 2 --jobs 16   # tu choi neu vong 1 chua du
 python scripts/tune_motion_memory.py --select              # chi ghi configs/motion_memory_tuned.yaml khi chon duoc
+# Tuning cu (tag tune) CHI DOC: code tu 2026-11-15 co them anchor_recovery nen chay lai
+# --round/--select tren tag cu bi tu choi (mm_configs/tuned khac noi dung).
+# 4b. Danh gia anchor tren dev (khai bao truoc: configs/motion_memory_anchor_dev.yaml):
+python scripts/tune_motion_memory.py --variant configs/motion_memory_anchor_dev.yaml --dry-run
+python scripts/tune_motion_memory.py --variant configs/motion_memory_anchor_dev.yaml --jobs 16
+# -> experiments/motion_memory_anchor_dev/summary.json (hoi quy, quyet dinh, mo ta)
+python scripts/diagnose_mm_hijack.py --experiment <exp MM> [...] --output experiments/motion_memory_anchor_dev/diagnose_hijack.json
 # -> experiments/<detector>_botsort_mm_occl_dev_tune_<id cau hinh>/ (moi cau hinh, ke ca cau hinh xau)
 #    + experiments/motion_memory_tuning_dev/{config.yaml,summary.json,mm_configs/}
 # Ket luan co the la "giu cau hinh mac dinh" - ghi ro trong summary.json.

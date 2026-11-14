@@ -104,3 +104,23 @@ ablation nguon (`source_tag`, vd `v2_001`), khong chay YOLO.
   `configs/motion_memory.yaml` khong bao gio bi ghi de.
 - Heldout: chay `run_occlusion_ablation.py --group heldout --tag <tag moi>
   --motion-memory-config configs/motion_memory_tuned.yaml` MOT lan.
+- Tuning cu CHI DOC: code tu 2026-11-15 them `anchor_recovery` vao MotionMemoryConfig nen
+  chay lai `--round`/`--select` tren tag `tune` bi tu choi (noi dung mm_configs/tuned khac).
+
+## Danh gia anchor tren dev (`tune_motion_memory.py --variant`)
+
+Khai bao truoc: `configs/motion_memory_anchor_dev.yaml` (version 1, sha256 ghi vao moi ket qua).
+Bien the: `default_regression` (hoi quy, phai trung `tune_default`), `anchor` (QUYET DINH),
+`anchor_lost25` (chi mo ta). Chay DUNG MOT LAN, giu ket qua du xau.
+
+| Duong dan | Git |
+|---|---|
+| `motion_memory_anchor_dev/{config.yaml,summary.json,mm_configs/}` | commit |
+| `motion_memory_anchor_dev/diagnose_hijack.json` (scripts/diagnose_mm_hijack.py) | commit |
+| `<det>_botsort_mm_occl_dev_anchor_v1_<bien the>/{config.yaml,metrics.json,ablation_vs_*.json}` | commit |
+| `<det>_botsort_mm_occl_dev_anchor_v1_<bien the>/scenarios/` | gitignore - sao luu |
+| `motion_memory_anchor_dev_anchor_v1_limit<N>_run<k>/`, `*_anchor_v1_limit<N>_run<k>_*` | thu nghiem (partial), khong quyet dinh; giu lai |
+
+`summary.json`: `status` = complete | blocked_by_regression (default_regression lech
+tune_default -> DUNG, khong dien giai anchor) | not_available. Cot mo ta va `anchor_lost25`
+khong dung de chon cau hinh; chi vao heldout neu ke hoach heldout khai bao truoc.
