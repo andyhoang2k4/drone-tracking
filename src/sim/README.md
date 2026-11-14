@@ -71,6 +71,18 @@ Việc cần làm **trước** (chưa kiểm chứng ở đây, kiểm tra theo 
 
 Mode PX4: `STABILIZED` (= "Angle"), `ACRO`, `OFFBOARD` (cho Auto). PX4 không có mode tên "Angle".
 
+### Trạng thái trên cloud (cập nhật 2026-11-15)
+
+Đã chạy thật trên cloud (Ubuntu 24.04, RTX 5060 Ti, driver 595.99.02):
+- Gazebo Harmonic 8.15.0 (`gz sim --version`), cài cùng PX4-Autopilot bằng `Tools/setup/ubuntu.sh --no-nuttx` (PX4 v1.18.0-beta1-1572-g53afcc82b2 ở ~/PX4-Autopilot; chưa build/chạy PX4).
+- Render headless bằng GPU: `DISPLAY= gz sim -v 4 -s -r --headless-rendering <world>.sdf`. World dùng plugin Sensors với `<render_engine>ogre2</render_engine>`. `~/.gz/rendering/ogre2.log` có "Starting EGL Subsystem" và GL_RENDERER là RTX 5060 Ti. Cảnh báo `libEGL ... /dev/dri/...: Permission denied` vô hại (EGL vẫn dùng NVIDIA qua /dev/nvidia*).
+- Camera chỉ render khi có subscriber trên topic của nó (ví dụ chạy kèm `gz topic -e -t <topic> > /dev/null &`). Thẻ `<save enabled="true"><path>…</path></save>` trong `<camera>` ghi ảnh PNG; tên file chứa `::`, cần đổi tên trước khi tải về Windows.
+- Hình học đo trên world thử (camera cao 12 m, pitch 0.7854, hfov 1.5708, 1344x756): vật cao 1.7 m cách ~18 m cao ~64 px trong ảnh, khớp ước tính tay ~63 px (f ≈ 672 px).
+
+Chưa kiểm: `make px4_sitl gz_x500_gimbal`; `GzCameraSource` với Gazebo thật; binding `python3-gz-transport13`/`python3-gz-msgs10` (cài bằng apt vào Python hệ thống) có import được từ `.venv` của dự án hay không; asset người/xe từ Fuel; YOLO11-seg và YOLO26-seg trên ảnh Gazebo (probe domain-gap, xem CLAUDE.md §2, quyết định 2026-11-15).
+
+File probe: scripts/sim_probe/ (smoke_world.sdf, check_pixels.py). Chạy từ thư mục ngoài repo: ảnh ghi vào frames_smoke/ theo thư mục đang chạy gz sim.
+
 ## Cấu trúc
 
 | File | Vai trò |
@@ -91,7 +103,7 @@ Mode PX4: `STABILIZED` (= "Angle"), `ACRO`, `OFFBOARD` (cho Auto). PX4 không c�
 test `PymavlinkLink` với "autopilot giả" qua UDP loopback (đúng khuôn tin nhắn MAVLink), và chạy cả vòng lặp trong thế giới demo.
 
 **Chưa kiểm** với phần cứng/phần mềm thật: PX4 SITL, Gazebo (`GzCameraSource`), YOLO + BoT-SORT (`UltralyticsBotSortSource`), gimbal
-thật trong Gazebo, tên tham số PX4 ở trên, và cửa sổ OpenCV trên máy cloud qua remote desktop. Số tuning (`config.py`) là giá trị khởi đầu, chưa đo.
+thật trong Gazebo, tên tham số PX4 ở trên, và cửa sổ OpenCV trên máy cloud qua remote desktop. Số tuning (`config.py`) là giá trị khởi đầu, chưa đo. Riêng render Gazebo headless đã kiểm một phần, xem "Trạng thái trên cloud" ở trên.
 
 ## Giới hạn đã biết
 

@@ -40,6 +40,13 @@ Nếu một task có vẻ dẫn tới các việc ở nhóm "không cần" phía
 2. **Sau bước 5** (Motion Memory chạy được): thay heuristic ngoại suy tạm trong `src/sim/target_manager.py` bằng `MotionMemory`, rồi chạy PX4 SITL + Gazebo để kiểm tra vòng kín: bám mục tiêu, bay tìm đúng hướng khi bị che khuất, bắt lại khi mục tiêu xuất hiện lại, độ mượt của lệnh bay.
 3. **Trước khi lên phần cứng thật:** dùng sim để chỉnh tham số bám (khoảng cách, tốc độ yaw, timeout) và thử các tình huống nguy hiểm.
 
+**Cập nhật (quyết định 2026-11-15): dựng PX4 SITL + Gazebo sớm để probe domain-gap.** Cho phép cài PX4-Autopilot + Gazebo Harmonic trên cloud (ngoài repo, ~/PX4-Autopilot) và dựng world thử (file trong scripts/sim_probe/, ảnh và log xuất ra ngoài repo) trước mốc 2 ở trên (mốc sau bước 5). Mục đích chỉ là kiểm tra detector huấn luyện trên VisDrone có nhận ra người/xe trong ảnh Gazebo hay không, trước khi đầu tư vào hình ảnh mô phỏng. Phạm vi:
+1. Probe domain-gap: render headless (ogre2, EGL), chạy YOLO11-seg và YOLO26-seg lên khung hình, xem ảnh có chú thích.
+2. Nguồn "oracle detection" từ boundingbox_camera của Gazebo, đưa vào lớp sim qua cùng interface nguồn dữ liệu như đầu ra pipeline (nguồn thay thế, không sửa detect/track/motion memory), để sim không phụ thuộc vào detector.
+3. Chỉ làm nếu probe cho thấy detector nhận được một phần: chỉnh asset và hình học (độ cao, góc nhìn, tỉ lệ pixel).
+4. Fine-tune detector riêng cho sim: chỉ làm khi người dùng cho phép rõ ràng.
+Mốc 2 ở trên (sau bước 5: thay heuristic bằng MotionMemory, kiểm tra vòng kín) không đổi. Các ràng buộc của "Ngoại lệ: lớp mô phỏng bay" vẫn giữ nguyên, và probe không được dùng để đánh giá motion memory.
+
 Số liệu đánh giá (mục 12) vẫn đo trên video có ground truth qua `src/evaluate.py`, không đo trên sim.
 
 ## 3. Môi trường phát triển
@@ -160,7 +167,8 @@ drone-tracking/
 │   ├── train_yolo11.sh
 │   ├── train_yolo26.sh
 │   ├── run_pipeline.py
-│   └── run_sim.py                 (chạy mô phỏng bay)
+│   ├── run_sim.py                 (chạy mô phỏng bay)
+│   └── sim_probe/                 (probe domain-gap Gazebo, xem mục 2)
 └── notebooks/
 ```
 
