@@ -1,0 +1,4323 @@
+{
+  "kind": "occlusion_target_screening",
+  "group": "dev",
+  "split_dir": "VisDrone2019-MOT-val",
+  "config_version": 2,
+  "config_sha256": "1c02e6dd77afbdea3e8f76c5e6087a42989e14bfd64e42f18b154edb3c1ea396",
+  "seed": 20261113,
+  "target_lock": {
+    "match_iou": 0.5,
+    "max_search_frames": 10,
+    "lock_confirm_frames": 3,
+    "lock_iou": 0.5,
+    "required_detectors": [
+      "yolo11",
+      "yolo26"
+    ]
+  },
+  "pre_occlusion_frames": 30,
+  "candidates_per_sequence": 12,
+  "targets_per_sequence": 4,
+  "detectors": {
+    "yolo11": {
+      "weights": "weights/eval/yolo11_best.pt",
+      "weights_sha256": "82f0be26b04e3e4fdf09dea0b038a587aa01a262c380e6abab58afc751339fed"
+    },
+    "yolo26": {
+      "weights": "weights/eval/yolo26_best.pt",
+      "weights_sha256": "6b7223db8f0e8f16a18bb53d0c82ff48bd33902eb2100e9337142b2f63f11c3a"
+    }
+  },
+  "partial": false,
+  "limit": null,
+  "errors": [],
+  "summary": {
+    "candidates": 83,
+    "screened": 83,
+    "eligible": 31,
+    "eligible_rate": 0.37349397590361444,
+    "selected_targets": 21,
+    "per_detector": {
+      "yolo11": {
+        "screened": 83,
+        "locked": 38,
+        "pass_rate": 0.4578313253012048,
+        "by_status": {
+          "locked": 38,
+          "lost_before_occlusion": 8,
+          "not_selected": 37
+        },
+        "locked_with_other_class": 8
+      },
+      "yolo26": {
+        "screened": 83,
+        "locked": 38,
+        "pass_rate": 0.4578313253012048,
+        "by_status": {
+          "locked": 38,
+          "lost_before_occlusion": 14,
+          "not_selected": 31
+        },
+        "locked_with_other_class": 9
+      }
+    },
+    "per_sequence": {
+      "uav0000086_00000_v": {
+        "candidates": 12,
+        "screened": 12,
+        "eligible": 2,
+        "yolo11_locked": 5,
+        "yolo11_pass_rate": 0.4166666666666667,
+        "yolo26_locked": 6,
+        "yolo26_pass_rate": 0.5,
+        "selected": 2
+      },
+      "uav0000117_02622_v": {
+        "candidates": 12,
+        "screened": 12,
+        "eligible": 1,
+        "yolo11_locked": 3,
+        "yolo11_pass_rate": 0.25,
+        "yolo26_locked": 2,
+        "yolo26_pass_rate": 0.16666666666666666,
+        "selected": 1
+      },
+      "uav0000137_00458_v": {
+        "candidates": 12,
+        "screened": 12,
+        "eligible": 7,
+        "yolo11_locked": 7,
+        "yolo11_pass_rate": 0.5833333333333334,
+        "yolo26_locked": 7,
+        "yolo26_pass_rate": 0.5833333333333334,
+        "selected": 4
+      },
+      "uav0000182_00000_v": {
+        "candidates": 12,
+        "screened": 12,
+        "eligible": 3,
+        "yolo11_locked": 3,
+        "yolo11_pass_rate": 0.25,
+        "yolo26_locked": 3,
+        "yolo26_pass_rate": 0.25,
+        "selected": 3
+      },
+      "uav0000268_05773_v": {
+        "candidates": 12,
+        "screened": 12,
+        "eligible": 3,
+        "yolo11_locked": 3,
+        "yolo11_pass_rate": 0.25,
+        "yolo26_locked": 3,
+        "yolo26_pass_rate": 0.25,
+        "selected": 3
+      },
+      "uav0000305_00000_v": {
+        "candidates": 11,
+        "screened": 11,
+        "eligible": 9,
+        "yolo11_locked": 10,
+        "yolo11_pass_rate": 0.9090909090909091,
+        "yolo26_locked": 9,
+        "yolo26_pass_rate": 0.8181818181818182,
+        "selected": 4
+      },
+      "uav0000339_00001_v": {
+        "candidates": 12,
+        "screened": 12,
+        "eligible": 6,
+        "yolo11_locked": 7,
+        "yolo11_pass_rate": 0.5833333333333334,
+        "yolo26_locked": 8,
+        "yolo26_pass_rate": 0.6666666666666666,
+        "selected": 4
+      }
+    },
+    "candidate_distribution": {
+      "count": 83,
+      "by_class": {
+        "0": 14,
+        "1": 12,
+        "2": 2,
+        "3": 34,
+        "4": 7,
+        "6": 6,
+        "7": 2,
+        "8": 1,
+        "9": 5
+      },
+      "by_min_side_px": {
+        "[48,64)": 21,
+        "[24,32)": 17,
+        "[32,48)": 17,
+        "[64,96)": 8,
+        "[16,24)": 14,
+        ">=96": 6
+      },
+      "median_min_side_px": 43.0
+    },
+    "eligible_distribution": {
+      "count": 31,
+      "by_class": {
+        "0": 4,
+        "1": 1,
+        "2": 1,
+        "3": 15,
+        "4": 5,
+        "6": 1,
+        "7": 1,
+        "8": 1,
+        "9": 2
+      },
+      "by_min_side_px": {
+        "[24,32)": 6,
+        "[32,48)": 3,
+        "[48,64)": 12,
+        "[64,96)": 4,
+        ">=96": 6
+      },
+      "median_min_side_px": 51.0
+    },
+    "selection_bias_note": "Muc tieu dat la muc tieu MOI detector khoa duoc truoc khi che: nghieng ve vat lon, tuong phan cao, lop pho bien. Ket qua occlusion chi co dieu kien tren tap nay."
+  },
+  "candidates": [
+    {
+      "candidate_id": "uav0000086_00000_v__t40",
+      "sequence": "uav0000086_00000_v",
+      "gt_target_id": 40,
+      "rank": 0,
+      "occlusion_start": 334,
+      "first_source_frame": 304,
+      "class": 1,
+      "category": 2,
+      "gt_box_wh": [
+        53.0,
+        57.0
+      ],
+      "min_side_px": 53.0,
+      "status": "screened",
+      "detectors": {
+        "yolo11": {
+          "status": "locked",
+          "selected_track_id": 30,
+          "selected_frame_idx": 0,
+          "selected_iou": 0.5865463394327259,
+          "selected_class": 1,
+          "class_matches_gt": true,
+          "lock_ious": [
+            0.6142327753373455,
+            0.6487630887643313,
+            0.6345785860671692
+          ],
+          "best_iou": 0.7214992495558891,
+          "frames_with_match": 29,
+          "frames_with_gt": 30,
+          "tracks_sha256": "f50b518c02e83c72bcd6e3d213ae4d612cca84c41d7a70263714fd5a31a0758c"
+        },
+        "yolo26": {
+          "status": "not_selected",
+          "selected_track_id": null,
+          "selected_frame_idx": null,
+          "selected_iou": null,
+          "selected_class": null,
+          "class_matches_gt": null,
+          "lock_ious": [],
+          "best_iou": 0.6571393638640721,
+          "frames_with_match": 17,
+          "frames_with_gt": 30,
+          "tracks_sha256": "bc207bfaa366373aea6afd3aabfd1760da72fc1e8a8af6d9b038812a647cedef"
+        }
+      },
+      "eligible": false
+    },
+    {
+      "candidate_id": "uav0000086_00000_v__t48",
+      "sequence": "uav0000086_00000_v",
+      "gt_target_id": 48,
+      "rank": 1,
+      "occlusion_start": 311,
+      "first_source_frame": 281,
+      "class": 0,
+      "category": 1,
+      "gt_box_wh": [
+        30.0,
+        67.0
+      ],
+      "min_side_px": 30.0,
+      "status": "screened",
+      "detectors": {
+        "yolo11": {
+          "status": "locked",
+          "selected_track_id": 20,
+          "selected_frame_idx": 0,
+          "selected_iou": 0.6912231077787699,
+          "selected_class": 0,
+          "class_matches_gt": true,
+          "lock_ious": [
+            0.6493105608028291,
+            0.6404438807983188,
+            0.6472835702481055
+          ],
+          "best_iou": 0.825871563443493,
+          "frames_with_match": 30,
+          "frames_with_gt": 30,
+          "tracks_sha256": "4f886e024c51d28f2dde9abdb14bff267c8a930e027d3474d41e5f3bae921402"
+        },
+        "yolo26": {
+          "status": "locked",
+          "selected_track_id": 13,
+          "selected_frame_idx": 0,
+          "selected_iou": 0.6904233916079655,
+          "selected_class": 0,
+          "class_matches_gt": true,
+          "lock_ious": [
+            0.5920436190122664,
+            0.6005223458182187,
+            0.6398051960134313
+          ],
+          "best_iou": 0.9256173078311429,
+          "frames_with_match": 30,
+          "frames_with_gt": 30,
+          "tracks_sha256": "f73dfd16d491187b3a5115e881860fe91d36b78c5b9648076407ec51974bcc30"
+        }
+      },
+      "eligible": true
+    },
+    {
+      "candidate_id": "uav0000086_00000_v__t32",
+      "sequence": "uav0000086_00000_v",
+      "gt_target_id": 32,
+      "rank": 2,
+      "occlusion_start": 106,
+      "first_source_frame": 76,
+      "class": 9,
+      "category": 10,
+      "gt_box_wh": [
+        52.0,
+        36.0
+      ],
+      "min_side_px": 36.0,
+      "status": "screened",
+      "detectors": {
+        "yolo11": {
+          "status": "not_selected",
+          "selected_track_id": null,
+          "selected_frame_idx": null,
+          "selected_iou": null,
+          "selected_class": null,
+          "class_matches_gt": null,
+          "lock_ious": [],
+          "best_iou": 0.0,
+          "frames_with_match": 0,
+          "frames_with_gt": 30,
+          "tracks_sha256": "958429d79eb86ef114eb2c38d508702df8321fd13186e71eed2128f3b3ccf8c4"
+        },
+        "yolo26": {
+          "status": "not_selected",
+          "selected_track_id": null,
+          "selected_frame_idx": null,
+          "selected_iou": null,
+          "selected_class": null,
+          "class_matches_gt": null,
+          "lock_ious": [],
+          "best_iou": 0.06035966780560054,
+          "frames_with_match": 0,
+          "frames_with_gt": 30,
+          "tracks_sha256": "c7cd1426c9a8813e717c850fdf0076897185f153122ef6971df63455ad786ae7"
+        }
+      },
+      "eligible": false
+    },
+    {
+      "candidate_id": "uav0000086_00000_v__t71",
+      "sequence": "uav0000086_00000_v",
+      "gt_target_id": 71,
+      "rank": 3,
+      "occlusion_start": 222,
+      "first_source_frame": 192,
+      "class": 1,
+      "category": 2,
+      "gt_box_wh": [
+        46.0,
+        48.0
+      ],
+      "min_side_px": 46.0,
+      "status": "screened",
+      "detectors": {
+        "yolo11": {
+          "status": "not_selected",
+          "selected_track_id": null,
+          "selected_frame_idx": null,
+          "selected_iou": null,
+          "selected_class": null,
+          "class_matches_gt": null,
+          "lock_ious": [],
+          "best_iou": 0.3711022561149377,
+          "frames_with_match": 0,
+          "frames_with_gt": 30,
+          "tracks_sha256": "e2b971af901cf9a6683a3c8cc83cc9d936fe438749206e520129387f79f8cc8b"
+        },
+        "yolo26": {
+          "status": "lost_before_occlusion",
+          "selected_track_id": 32,
+          "selected_frame_idx": 7,
+          "selected_iou": 0.6166844022038445,
+          "selected_class": 1,
+          "class_matches_gt": true,
+          "lock_ious": [
+            0.3339074821263052,
+            0.38028707439742493,
+            0.4802649770963448
+          ],
+          "best_iou": 0.6213197570375196,
+          "frames_with_match": 4,
+          "frames_with_gt": 30,
+          "tracks_sha256": "b26eeedb6245bb50a67fdf1c27bc90c7feac947efe433450ec3aba3431b98aa1"
+        }
+      },
+      "eligible": false
+    },
+    {
+      "candidate_id": "uav0000086_00000_v__t17",
+      "sequence": "uav0000086_00000_v",
+      "gt_target_id": 17,
+      "rank": 4,
+      "occlusion_start": 31,
+      "first_source_frame": 1,
+      "class": 0,
+      "category": 1,
+      "gt_box_wh": [
+        30.0,
+        76.0
+      ],
+      "min_side_px": 30.0,
+      "status": "screened",
+      "detectors": {
+        "yolo11": {
+          "status": "locked",
+          "selected_track_id": 12,
+          "selected_frame_idx": 0,
+          "selected_iou": 0.9459721688311852,
+          "selected_class": 0,
+          "class_matches_gt": true,
+          "lock_ious": [
+            0.7903866193299226,
+            0.7569747722759332,
+            0.671476505416779
+          ],
+          "best_iou": 0.9459721688311852,
+          "frames_with_match": 30,
+          "frames_with_gt": 30,
+          "tracks_sha256": "b999047eb255150b97e8c64304fa1ae9d81bb7604f5c1f7333ca46fec49d81d2"
+        },
+        "yolo26": {
+          "status": "locked",
+          "selected_track_id": 9,
+          "selected_frame_idx": 0,
+          "selected_iou": 0.9551269954197869,
+          "selected_class": 0,
+          "class_matches_gt": true,
+          "lock_ious": [
+            0.7793543551037977,
+            0.7735462490700528,
+            0.647728590399919
+          ],
+          "best_iou": 0.9551269954197869,
+          "frames_with_match": 26,
+          "frames_with_gt": 30,
+          "tracks_sha256": "03c7d1e78c664296cf15ebad98ba76bd020c70e1d8707c2ebae8255792d079b3"
+        }
+      },
+      "eligible": true
+    },
+    {
+      "candidate_id": "uav0000086_00000_v__t41",
+      "sequence": "uav0000086_00000_v",
+      "gt_target_id": 41,
+      "rank": 5,
+      "occlusion_start": 188,
+      "first_source_frame": 158,
+      "class": 1,
+      "category": 2,
+      "gt_box_wh": [
+        64.0,
+        72.0
+      ],
+      "min_side_px": 64.0,
+      "status": "screened",
+      "detectors": {
+        "yolo11": {
+          "status": "lost_before_occlusion",
+          "selected_track_id": 73,
+          "selected_frame_idx": 5,
+          "selected_iou": 0.7210184212149946,
+          "selected_class": 0,
+          "class_matches_gt": false,
+          "lock_ious": [
+            null,
+            null,
+            null
+          ],
+          "best_iou": 0.7667342580087391,
+          "frames_with_match": 24,
+          "frames_with_gt": 30,
+          "tracks_sha256": "c9de6c1143cb04d145d22a9487a7752729e042858404718513bbd379623b7b64"
+        },
+        "yolo26": {
+          "status": "locked",
+          "selected_track_id": 52,
+          "selected_frame_idx": 0,
+          "selected_iou": 0.6320138248445948,
+          "selected_class": 1,
+          "class_matches_gt": true,
+          "lock_ious": [
+            0.7548629068417068,
+            0.7725988684538289,
+            0.7566402598447316
+          ],
+          "best_iou": 0.7892171249757224,
+          "frames_with_match": 27,
+          "frames_with_gt": 30,
+          "tracks_sha256": "3860d42f5d200498c55c9be5f71ecfec61e3056839a874c83cbc60b7fef02a51"
+        }
+      },
+      "eligible": false
+    },
+    {
+      "candidate_id": "uav0000086_00000_v__t57",
+      "sequence": "uav0000086_00000_v",
+      "gt_target_id": 57,
+      "rank": 6,
+      "occlusion_start": 288,
+      "first_source_frame": 258,
+      "class": 0,
+      "category": 1,
+      "gt_box_wh": [
+        23.0,
+        63.0
+      ],
+      "min_side_px": 23.0,
+      "status": "screened",
+      "detectors": {
+        "yolo11": {
+          "status": "locked",
+          "selected_track_id": 20,
+          "selected_frame_idx": 0,
+          "selected_iou": 0.7420695538275426,
+          "selected_class": 0,
+          "class_matches_gt": true,
+          "lock_ious": [
+            0.6345227172920976,
+            0.608189797803333,
+            0.632581312443392
+          ],
+          "best_iou": 0.8029751750499812,
+          "frames_with_match": 30,
+          "frames_with_gt": 30,
+          "tracks_sha256": "32d60e9d80b05ae33b1aef0ad345aebf877261dc4e337c88b989dd2f2fa7b345"
+        },
+        "yolo26": {
+          "status": "lost_before_occlusion",
+          "selected_track_id": 23,
+          "selected_frame_idx": 0,
+          "selected_iou": 0.6122695887618399,
+          "selected_class": 0,
+          "class_matches_gt": true,
+          "lock_ious": [
+            0.4756107250357591,
+            0.4491295640670977,
+            0.44106134958411775
+          ],
+          "best_iou": 0.7807028444895966,
+          "frames_with_match": 28,
+          "frames_with_gt": 30,
+          "tracks_sha256": "a91ce398c1df0d7edf4b14033e9e4a53e5ef2d7ae8ccd333e19e337df48789b0"
+        }
+      },
+      "eligible": false
+    },
+    {
+      "candidate_id": "uav0000086_00000_v__t28",
+      "sequence": "uav0000086_00000_v",
+      "gt_target_id": 28,
+      "rank": 7,
+      "occlusion_start": 41,
+      "first_source_frame": 11,
+      "class": 0,
+      "category": 1,
+      "gt_box_wh": [
+        23.0,
+        78.0
+      ],
+      "min_side_px": 23.0,
+      "status": "screened",
+      "detectors": {
+        "yolo11": {
+          "status": "locked",
+          "selected_track_id": 2,
+          "selected_frame_idx": 0,
+          "selected_iou": 0.7013267020683599,
+          "selected_class": 0,
+          "class_matches_gt": true,
+          "lock_ious": [
+            0.6055086776066139,
+            0.6046334153826587,
+            0.6217472371658458
+          ],
+          "best_iou": 0.7966457539527084,
+          "frames_with_match": 30,
+          "frames_with_gt": 30,
+          "tracks_sha256": "6a5a463453b3649dc4b80516c0763852d053981f30fba117d262876cc93e6771"
+        },
+        "yolo26": {
+          "status": "lost_before_occlusion",
+          "selected_track_id": 14,
+          "selected_frame_idx": 0,
+          "selected_iou": 0.6290849123130664,
+          "selected_class": 0,
+          "class_matches_gt": true,
+          "lock_ious": [
+            0.5007438956368876,
+            0.4744815111338578,
+            0.43225902071293354
+          ],
+          "best_iou": 0.8064747530113309,
+          "frames_with_match": 28,
+          "frames_with_gt": 30,
+          "tracks_sha256": "483501d6ecd3017166b514f76f464f60f85e467af5192260120796e21004be8e"
+        }
+      },
+      "eligible": false
+    },
+    {
+      "candidate_id": "uav0000086_00000_v__t4",
+      "sequence": "uav0000086_00000_v",
+      "gt_target_id": 4,
+      "rank": 8,
+      "occlusion_start": 188,
+      "first_source_frame": 158,
+      "class": 1,
+      "category": 2,
+      "gt_box_wh": [
+        24.0,
+        41.0
+      ],
+      "min_side_px": 24.0,
+      "status": "screened",
+      "detectors": {
+        "yolo11": {
+          "status": "not_selected",
+          "selected_track_id": null,
+          "selected_frame_idx": null,
+          "selected_iou": null,
+          "selected_class": null,
+          "class_matches_gt": null,
+          "lock_ious": [],
+          "best_iou": 0.0,
+          "frames_with_match": 0,
+          "frames_with_gt": 30,
+          "tracks_sha256": "84c8d5ede7177d86087a4522c218dc93628d1e2baba695c1e0c13a390e9ab3a2"
+        },
+        "yolo26": {
+          "status": "not_selected",
+          "selected_track_id": null,
+          "selected_frame_idx": null,
+          "selected_iou": null,
+          "selected_class": null,
+          "class_matches_gt": null,
+          "lock_ious": [],
+          "best_iou": 0.0,
+          "frames_with_match": 0,
+          "frames_with_gt": 30,
+          "tracks_sha256": "5976e16141b945bc9d621f92d1f176db8c2f6b1160a7b3babf2929d78b991608"
+        }
+      },
+      "eligible": false
+    },
+    {
+      "candidate_id": "uav0000086_00000_v__t25",
+      "sequence": "uav0000086_00000_v",
+      "gt_target_id": 25,
+      "rank": 9,
+      "occlusion_start": 142,
+      "first_source_frame": 112,
+      "class": 1,
+      "category": 2,
+      "gt_box_wh": [
+        27.0,
+        52.0
+      ],
+      "min_side_px": 27.0,
+      "status": "screened",
+      "detectors": {
+        "yolo11": {
+          "status": "not_selected",
+          "selected_track_id": null,
+          "selected_frame_idx": null,
+          "selected_iou": null,
+          "selected_class": null,
+          "class_matches_gt": null,
+          "lock_ious": [],
+          "best_iou": 0.8590730512384654,
+          "frames_with_match": 20,
+          "frames_with_gt": 30,
+          "tracks_sha256": "0e020c8288bbdfaa9587878826c4d3573764797c50b47749c23953717d3c5425"
+        },
+        "yolo26": {
+          "status": "locked",
+          "selected_track_id": 21,
+          "selected_frame_idx": 0,
+          "selected_iou": 0.8185174369879811,
+          "selected_class": 0,
+          "class_matches_gt": false,
+          "lock_ious": [
+            0.6926400086557101,
+            0.7710905380915184,
+            0.7238644690710592
+          ],
+          "best_iou": 0.9029656201587573,
+          "frames_with_match": 30,
+          "frames_with_gt": 30,
+          "tracks_sha256": "6020465c4a1ab210537f5f20b8fd5e0f1911c58e357d3b4191a67f74614b5b80"
+        }
+      },
+      "eligible": false
+    },
+    {
+      "candidate_id": "uav0000086_00000_v__t9",
+      "sequence": "uav0000086_00000_v",
+      "gt_target_id": 9,
+      "rank": 10,
+      "occlusion_start": 125,
+      "first_source_frame": 95,
+      "class": 1,
+      "category": 2,
+      "gt_box_wh": [
+        24.0,
+        41.0
+      ],
+      "min_side_px": 24.0,
+      "status": "screened",
+      "detectors": {
+        "yolo11": {
+          "status": "not_selected",
+          "selected_track_id": null,
+          "selected_frame_idx": null,
+          "selected_iou": null,
+          "selected_class": null,
+          "class_matches_gt": null,
+          "lock_ious": [],
+          "best_iou": 0.4046539080663117,
+          "frames_with_match": 0,
+          "frames_with_gt": 30,
+          "tracks_sha256": "afe6489f45f57207611127c7d52e1e7187e8f32ee89bd9a93e35d02c05d8c622"
+        },
+        "yolo26": {
+          "status": "locked",
+          "selected_track_id": 31,
+          "selected_frame_idx": 0,
+          "selected_iou": 0.8643646403909949,
+          "selected_class": 1,
+          "class_matches_gt": true,
+          "lock_ious": [
+            0.7913641690369316,
+            0.8316794552317843,
+            0.8064662451747941
+          ],
+          "best_iou": 0.9049615055224215,
+          "frames_with_match": 29,
+          "frames_with_gt": 30,
+          "tracks_sha256": "d3df3791232dc51cfa17ae337c7018d1b10d05aa3f273bc242e292e9f96a4b6b"
+        }
+      },
+      "eligible": false
+    },
+    {
+      "candidate_id": "uav0000086_00000_v__t3",
+      "sequence": "uav0000086_00000_v",
+      "gt_target_id": 3,
+      "rank": 11,
+      "occlusion_start": 108,
+      "first_source_frame": 78,
+      "class": 1,
+      "category": 2,
+      "gt_box_wh": [
+        21.0,
+        32.0
+      ],
+      "min_side_px": 21.0,
+      "status": "screened",
+      "detectors": {
+        "yolo11": {
+          "status": "not_selected",
+          "selected_track_id": null,
+          "selected_frame_idx": null,
+          "selected_iou": null,
+          "selected_class": null,
+          "class_matches_gt": null,
+          "lock_ious": [],
+          "best_iou": 0.26832143634262107,
+          "frames_with_match": 0,
+          "frames_with_gt": 30,
+          "tracks_sha256": "13138196b3d05f73f9727ccc0ded9697ded57399f387c13a8db114eb50dbcb6c"
+        },
+        "yolo26": {
+          "status": "locked",
+          "selected_track_id": 35,
+          "selected_frame_idx": 0,
+          "selected_iou": 0.6180792942915677,
+          "selected_class": 1,
+          "class_matches_gt": true,
+          "lock_ious": [
+            0.6346577713730446,
+            0.5946074606686038,
+            0.5011969841172095
+          ],
+          "best_iou": 0.6930613475901166,
+          "frames_with_match": 17,
+          "frames_with_gt": 30,
+          "tracks_sha256": "95c82935ec602ce3494815367f2135dd15d0f08e0c3236aed6dfc9a2f40a9032"
+        }
+      },
+      "eligible": false
+    },
+    {
+      "candidate_id": "uav0000117_02622_v__t8",
+      "sequence": "uav0000117_02622_v",
+      "gt_target_id": 8,
+      "rank": 0,
+      "occlusion_start": 192,
+      "first_source_frame": 162,
+      "class": 0,
+      "category": 1,
+      "gt_box_wh": [
+        43.0,
+        85.0
+      ],
+      "min_side_px": 43.0,
+      "status": "screened",
+      "detectors": {
+        "yolo11": {
+          "status": "locked",
+          "selected_track_id": 29,
+          "selected_frame_idx": 1,
+          "selected_iou": 0.5452204281159522,
+          "selected_class": 0,
+          "class_matches_gt": true,
+          "lock_ious": [
+            0.6415550166352103,
+            0.6428307927534932,
+            0.6388247536701722
+          ],
+          "best_iou": 0.759196778376553,
+          "frames_with_match": 23,
+          "frames_with_gt": 30,
+          "tracks_sha256": "f0940208f37064e2c3505d91cb3a6eb384a68187d3f761e5441c5ed1a5aa1cb5"
+        },
+        "yolo26": {
+          "status": "not_selected",
+          "selected_track_id": null,
+          "selected_frame_idx": null,
+          "selected_iou": null,
+          "selected_class": null,
+          "class_matches_gt": null,
+          "lock_ious": [],
+          "best_iou": 0.7571843473222493,
+          "frames_with_match": 16,
+          "frames_with_gt": 30,
+          "tracks_sha256": "06f98b4a42301bf39c92e2ae601508db244458153adc7d57f7fea7e8788e4e1a"
+        }
+      },
+      "eligible": false
+    },
+    {
+      "candidate_id": "uav0000117_02622_v__t100",
+      "sequence": "uav0000117_02622_v",
+      "gt_target_id": 100,
+      "rank": 1,
+      "occlusion_start": 34,
+      "first_source_frame": 4,
+      "class": 0,
+      "category": 1,
+      "gt_box_wh": [
+        39.0,
+        92.0
+      ],
+      "min_side_px": 39.0,
+      "status": "screened",
+      "detectors": {
+        "yolo11": {
+          "status": "lost_before_occlusion",
+          "selected_track_id": 21,
+          "selected_frame_idx": 0,
+          "selected_iou": 0.7663057062779423,
+          "selected_class": 0,
+          "class_matches_gt": true,
+          "lock_ious": [
+            0.5470705422288143,
+            0.4402328440123171,
+            0.5235276679796219
+          ],
+          "best_iou": 0.837737895472294,
+          "frames_with_match": 23,
+          "frames_with_gt": 30,
+          "tracks_sha256": "1958c14099d590c85eafc62d142ed7670d123fed1d883d9e918d2c109f2516cb"
+        },
+        "yolo26": {
+          "status": "locked",
+          "selected_track_id": 16,
+          "selected_frame_idx": 0,
+          "selected_iou": 0.647030051908209,
+          "selected_class": 1,
+          "class_matches_gt": false,
+          "lock_ious": [
+            0.5217839992368536,
+            0.506011327819039,
+            0.5485943963702029
+          ],
+          "best_iou": 0.8924610404336906,
+          "frames_with_match": 21,
+          "frames_with_gt": 30,
+          "tracks_sha256": "7d8f751798a923b6f4a4d617dd0ad72a1f6d34e4906489bc01ed12e87985229b"
+        }
+      },
+      "eligible": false
+    },
+    {
+      "candidate_id": "uav0000117_02622_v__t106",
+      "sequence": "uav0000117_02622_v",
+      "gt_target_id": 106,
+      "rank": 2,
+      "occlusion_start": 62,
+      "first_source_frame": 32,
+      "class": 3,
+      "category": 4,
+      "gt_box_wh": [
+        59.0,
+        62.0
+      ],
+      "min_side_px": 59.0,
+      "status": "screened",
+      "detectors": {
+        "yolo11": {
+          "status": "lost_before_occlusion",
+          "selected_track_id": 70,
+          "selected_frame_idx": 6,
+          "selected_iou": 0.523138491092057,
+          "selected_class": 3,
+          "class_matches_gt": true,
+          "lock_ious": [
+            null,
+            null,
+            null
+          ],
+          "best_iou": 0.6122976165190603,
+          "frames_with_match": 12,
+          "frames_with_gt": 30,
+          "tracks_sha256": "bd22cd566473d05c0272b0bf1e762f2d009e00b17cebfd6e301c12e84c4fc9bb"
+        },
+        "yolo26": {
+          "status": "not_selected",
+          "selected_track_id": null,
+          "selected_frame_idx": null,
+          "selected_iou": null,
+          "selected_class": null,
+          "class_matches_gt": null,
+          "lock_ious": [],
+          "best_iou": 0.0,
+          "frames_with_match": 0,
+          "frames_with_gt": 30,
+          "tracks_sha256": "b5b5ec26a98b48673582ea132be33a63960b35833ef5dabac46da486e46c0eb5"
+        }
+      },
+      "eligible": false
+    },
+    {
+      "candidate_id": "uav0000117_02622_v__t146",
+      "sequence": "uav0000117_02622_v",
+      "gt_target_id": 146,
+      "rank": 3,
+      "occlusion_start": 118,
+      "first_source_frame": 88,
+      "class": 1,
+      "category": 2,
+      "gt_box_wh": [
+        45.0,
+        53.0
+      ],
+      "min_side_px": 45.0,
+      "status": "screened",
+      "detectors": {
+        "yolo11": {
+          "status": "not_selected",
+          "selected_track_id": null,
+          "selected_frame_idx": null,
+          "selected_iou": null,
+          "selected_class": null,
+          "class_matches_gt": null,
+          "lock_ious": [],
+          "best_iou": 0.46368952843194294,
+          "frames_with_match": 0,
+          "frames_with_gt": 30,
+          "tracks_sha256": "e113b79b32f778027afa2a1030efd1c9f7ed5f237f6ce6fc3616f15382d3c513"
+        },
+        "yolo26": {
+          "status": "not_selected",
+          "selected_track_id": null,
+          "selected_frame_idx": null,
+          "selected_iou": null,
+          "selected_class": null,
+          "class_matches_gt": null,
+          "lock_ious": [],
+          "best_iou": 0.45037492886645775,
+          "frames_with_match": 0,
+          "frames_with_gt": 30,
+          "tracks_sha256": "824c202cd294b7b56eb2a6ae995df5abc7542a7d295fff53ef8039a893f531f7"
+        }
+      },
+      "eligible": false
+    },
+    {
+      "candidate_id": "uav0000117_02622_v__t89",
+      "sequence": "uav0000117_02622_v",
+      "gt_target_id": 89,
+      "rank": 4,
+      "occlusion_start": 117,
+      "first_source_frame": 87,
+      "class": 3,
+      "category": 4,
+      "gt_box_wh": [
+        79.0,
+        55.0
+      ],
+      "min_side_px": 55.0,
+      "status": "screened",
+      "detectors": {
+        "yolo11": {
+          "status": "not_selected",
+          "selected_track_id": null,
+          "selected_frame_idx": null,
+          "selected_iou": null,
+          "selected_class": null,
+          "class_matches_gt": null,
+          "lock_ious": [],
+          "best_iou": 0.013863477106081087,
+          "frames_with_match": 0,
+          "frames_with_gt": 30,
+          "tracks_sha256": "1f349fa536d531c6e984ff0e054efbcb15a6865f144385171fd2d902c52691b8"
+        },
+        "yolo26": {
+          "status": "not_selected",
+          "selected_track_id": null,
+          "selected_frame_idx": null,
+          "selected_iou": null,
+          "selected_class": null,
+          "class_matches_gt": null,
+          "lock_ious": [],
+          "best_iou": 0.009741414343210587,
+          "frames_with_match": 0,
+          "frames_with_gt": 30,
+          "tracks_sha256": "cb96602ed2376728083a20c265eb3da38dda7dbbd33c55206aff0e03c9a2dc65"
+        }
+      },
+      "eligible": false
+    },
+    {
+      "candidate_id": "uav0000117_02622_v__t22",
+      "sequence": "uav0000117_02622_v",
+      "gt_target_id": 22,
+      "rank": 5,
+      "occlusion_start": 41,
+      "first_source_frame": 11,
+      "class": 0,
+      "category": 1,
+      "gt_box_wh": [
+        45.0,
+        97.0
+      ],
+      "min_side_px": 45.0,
+      "status": "screened",
+      "detectors": {
+        "yolo11": {
+          "status": "locked",
+          "selected_track_id": 18,
+          "selected_frame_idx": 0,
+          "selected_iou": 0.7120566017252622,
+          "selected_class": 0,
+          "class_matches_gt": true,
+          "lock_ious": [
+            0.5918423557523373,
+            0.7008787368158861,
+            0.6529237546855534
+          ],
+          "best_iou": 0.7505751420222985,
+          "frames_with_match": 22,
+          "frames_with_gt": 30,
+          "tracks_sha256": "f3d2a166d30049369dbcdf7bccc315c5c541b365ae26426f811d23f74790bc69"
+        },
+        "yolo26": {
+          "status": "locked",
+          "selected_track_id": 11,
+          "selected_frame_idx": 0,
+          "selected_iou": 0.8063781407700198,
+          "selected_class": 0,
+          "class_matches_gt": true,
+          "lock_ious": [
+            0.6157038821539741,
+            0.7100721517490289,
+            0.6522433662639071
+          ],
+          "best_iou": 0.8063781407700198,
+          "frames_with_match": 28,
+          "frames_with_gt": 30,
+          "tracks_sha256": "5e9fbaac9f4391789086f73c832248fa0a85f96d2fa3bdb80c3937eb2fd0df0c"
+        }
+      },
+      "eligible": true
+    },
+    {
+      "candidate_id": "uav0000117_02622_v__t1",
+      "sequence": "uav0000117_02622_v",
+      "gt_target_id": 1,
+      "rank": 6,
+      "occlusion_start": 202,
+      "first_source_frame": 172,
+      "class": 0,
+      "category": 1,
+      "gt_box_wh": [
+        32.0,
+        83.0
+      ],
+      "min_side_px": 32.0,
+      "status": "screened",
+      "detectors": {
+        "yolo11": {
+          "status": "lost_before_occlusion",
+          "selected_track_id": 34,
+          "selected_frame_idx": 8,
+          "selected_iou": 0.6278797542110339,
+          "selected_class": 0,
+          "class_matches_gt": true,
+          "lock_ious": [
+            null,
+            null,
+            null
+          ],
+          "best_iou": 0.6491387290392694,
+          "frames_with_match": 2,
+          "frames_with_gt": 30,
+          "tracks_sha256": "f50bc9e2ffddfdc3bbf5905a3419bf52a05f47d89440bec264925f1c3b7e7c07"
+        },
+        "yolo26": {
+          "status": "lost_before_occlusion",
+          "selected_track_id": 43,
+          "selected_frame_idx": 1,
+          "selected_iou": 0.5981677633050846,
+          "selected_class": 0,
+          "class_matches_gt": true,
+          "lock_ious": [
+            null,
+            null,
+            null
+          ],
+          "best_iou": 0.6394531199230108,
+          "frames_with_match": 9,
+          "frames_with_gt": 30,
+          "tracks_sha256": "9f3c5381608051bf5f5cc0eb73514b1973fd65aae39ba0cec29429c8b9ec58fc"
+        }
+      },
+      "eligible": false
+    },
+    {
+      "candidate_id": "uav0000117_02622_v__t88",
+      "sequence": "uav0000117_02622_v",
+      "gt_target_id": 88,
+      "rank": 7,
+      "occlusion_start": 149,
+      "first_source_frame": 119,
+      "class": 3,
+      "category": 4,
+      "gt_box_wh": [
+        87.0,
+        55.0
+      ],
+      "min_side_px": 55.0,
+      "status": "screened",
+      "detectors": {
+        "yolo11": {
+          "status": "not_selected",
+          "selected_track_id": null,
+          "selected_frame_idx": null,
+          "selected_iou": null,
+          "selected_class": null,
+          "class_matches_gt": null,
+          "lock_ious": [],
+          "best_iou": 0.8294169817305932,
+          "frames_with_match": 5,
+          "frames_with_gt": 30,
+          "tracks_sha256": "0ce88040c5a6d2b7a1add19f583f6c4ba59d3f65a6c4d2f874115bc9864517da"
+        },
+        "yolo26": {
+          "status": "not_selected",
+          "selected_track_id": null,
+          "selected_frame_idx": null,
+          "selected_iou": null,
+          "selected_class": null,
+          "class_matches_gt": null,
+          "lock_ious": [],
+          "best_iou": 0.030349756740854793,
+          "frames_with_match": 0,
+          "frames_with_gt": 30,
+          "tracks_sha256": "983fa89d59a9379c2c5cdf4b66356f20c58d87fd895411956f2d647fe0f82e51"
+        }
+      },
+      "eligible": false
+    },
+    {
+      "candidate_id": "uav0000117_02622_v__t87",
+      "sequence": "uav0000117_02622_v",
+      "gt_target_id": 87,
+      "rank": 8,
+      "occlusion_start": 53,
+      "first_source_frame": 23,
+      "class": 3,
+      "category": 4,
+      "gt_box_wh": [
+        73.0,
+        51.0
+      ],
+      "min_side_px": 51.0,
+      "status": "screened",
+      "detectors": {
+        "yolo11": {
+          "status": "not_selected",
+          "selected_track_id": null,
+          "selected_frame_idx": null,
+          "selected_iou": null,
+          "selected_class": null,
+          "class_matches_gt": null,
+          "lock_ious": [],
+          "best_iou": 0.12621947032300654,
+          "frames_with_match": 0,
+          "frames_with_gt": 30,
+          "tracks_sha256": "4b87307aeccd584f7828aa47c7fd0f752e726e6b2d225c159f42aba4db4c9331"
+        },
+        "yolo26": {
+          "status": "not_selected",
+          "selected_track_id": null,
+          "selected_frame_idx": null,
+          "selected_iou": null,
+          "selected_class": null,
+          "class_matches_gt": null,
+          "lock_ious": [],
+          "best_iou": 0.10538513179892654,
+          "frames_with_match": 0,
+          "frames_with_gt": 30,
+          "tracks_sha256": "029e2d4553050aa2ee736ff762b0999567c7b2e664290464d834012dba8af51c"
+        }
+      },
+      "eligible": false
+    },
+    {
+      "candidate_id": "uav0000117_02622_v__t151",
+      "sequence": "uav0000117_02622_v",
+      "gt_target_id": 151,
+      "rank": 9,
+      "occlusion_start": 195,
+      "first_source_frame": 165,
+      "class": 9,
+      "category": 10,
+      "gt_box_wh": [
+        21.0,
+        33.0
+      ],
+      "min_side_px": 21.0,
+      "status": "screened",
+      "detectors": {
+        "yolo11": {
+          "status": "not_selected",
+          "selected_track_id": null,
+          "selected_frame_idx": null,
+          "selected_iou": null,
+          "selected_class": null,
+          "class_matches_gt": null,
+          "lock_ious": [],
+          "best_iou": 0.0,
+          "frames_with_match": 0,
+          "frames_with_gt": 30,
+          "tracks_sha256": "094d938d51c9a3e98791f81a42aca1c292bafd64b88443b810b8c8b931b03779"
+        },
+        "yolo26": {
+          "status": "not_selected",
+          "selected_track_id": null,
+          "selected_frame_idx": null,
+          "selected_iou": null,
+          "selected_class": null,
+          "class_matches_gt": null,
+          "lock_ious": [],
+          "best_iou": 0.0,
+          "frames_with_match": 0,
+          "frames_with_gt": 30,
+          "tracks_sha256": "f148667c7427998a6d52f7a6a419c589c52fa630cf11c381161aa18ce6561bb1"
+        }
+      },
+      "eligible": false
+    },
+    {
+      "candidate_id": "uav0000117_02622_v__t5",
+      "sequence": "uav0000117_02622_v",
+      "gt_target_id": 5,
+      "rank": 10,
+      "occlusion_start": 167,
+      "first_source_frame": 137,
+      "class": 6,
+      "category": 7,
+      "gt_box_wh": [
+        74.0,
+        86.0
+      ],
+      "min_side_px": 74.0,
+      "status": "screened",
+      "detectors": {
+        "yolo11": {
+          "status": "locked",
+          "selected_track_id": 11,
+          "selected_frame_idx": 0,
+          "selected_iou": 0.5802850246523763,
+          "selected_class": 6,
+          "class_matches_gt": true,
+          "lock_ious": [
+            0.8518754022652013,
+            0.8273735433725797,
+            0.7237596040059537
+          ],
+          "best_iou": 0.8518754022652013,
+          "frames_with_match": 28,
+          "frames_with_gt": 30,
+          "tracks_sha256": "9d56d2dc0624c0af5e45a1f7245e29645e9a16cbf14e811328334b8b5a11e68d"
+        },
+        "yolo26": {
+          "status": "lost_before_occlusion",
+          "selected_track_id": 18,
+          "selected_frame_idx": 0,
+          "selected_iou": 0.5993984297897735,
+          "selected_class": 6,
+          "class_matches_gt": true,
+          "lock_ious": [
+            null,
+            null,
+            null
+          ],
+          "best_iou": 0.7346000250724076,
+          "frames_with_match": 20,
+          "frames_with_gt": 30,
+          "tracks_sha256": "aefc958f2a2f065838a8bf38b826b9e1491203c3ba6c5f44597e62894a195d62"
+        }
+      },
+      "eligible": false
+    },
+    {
+      "candidate_id": "uav0000117_02622_v__t91",
+      "sequence": "uav0000117_02622_v",
+      "gt_target_id": 91,
+      "rank": 11,
+      "occlusion_start": 219,
+      "first_source_frame": 189,
+      "class": 3,
+      "category": 4,
+      "gt_box_wh": [
+        47.0,
+        47.0
+      ],
+      "min_side_px": 47.0,
+      "status": "screened",
+      "detectors": {
+        "yolo11": {
+          "status": "not_selected",
+          "selected_track_id": null,
+          "selected_frame_idx": null,
+          "selected_iou": null,
+          "selected_class": null,
+          "class_matches_gt": null,
+          "lock_ious": [],
+          "best_iou": 0.00030400690339901705,
+          "frames_with_match": 0,
+          "frames_with_gt": 30,
+          "tracks_sha256": "85df87a08adbc1a287c6df08438b9e38088367482c9d108a17d86e363dd89f2f"
+        },
+        "yolo26": {
+          "status": "not_selected",
+          "selected_track_id": null,
+          "selected_frame_idx": null,
+          "selected_iou": null,
+          "selected_class": null,
+          "class_matches_gt": null,
+          "lock_ious": [],
+          "best_iou": 0.0864526432867567,
+          "frames_with_match": 0,
+          "frames_with_gt": 30,
+          "tracks_sha256": "10078ff62f1da6e0210ae4273fa2bce5e61014887993a45bee4018fe5dad1a59"
+        }
+      },
+      "eligible": false
+    },
+    {
+      "candidate_id": "uav0000137_00458_v__t72",
+      "sequence": "uav0000137_00458_v",
+      "gt_target_id": 72,
+      "rank": 0,
+      "occlusion_start": 51,
+      "first_source_frame": 21,
+      "class": 3,
+      "category": 4,
+      "gt_box_wh": [
+        81.0,
+        61.0
+      ],
+      "min_side_px": 61.0,
+      "status": "screened",
+      "detectors": {
+        "yolo11": {
+          "status": "not_selected",
+          "selected_track_id": null,
+          "selected_frame_idx": null,
+          "selected_iou": null,
+          "selected_class": null,
+          "class_matches_gt": null,
+          "lock_ious": [],
+          "best_iou": 0.11752959372796581,
+          "frames_with_match": 0,
+          "frames_with_gt": 30,
+          "tracks_sha256": "632c2e89c1c2846762e90b3e1c5196960710526d847c286e3f2e951936133553"
+        },
+        "yolo26": {
+          "status": "lost_before_occlusion",
+          "selected_track_id": 137,
+          "selected_frame_idx": 5,
+          "selected_iou": 0.8057160210245126,
+          "selected_class": 3,
+          "class_matches_gt": true,
+          "lock_ious": [
+            0.5190533451163919,
+            0.498137681862888,
+            0.47342793941729444
+          ],
+          "best_iou": 0.8156027422380626,
+          "frames_with_match": 23,
+          "frames_with_gt": 30,
+          "tracks_sha256": "9750cb30ba6c7bc7f7a3a058b91c6edb1ec9b37f41d440e0acc86bd3fa7f92ec"
+        }
+      },
+      "eligible": false
+    },
+    {
+      "candidate_id": "uav0000137_00458_v__t156",
+      "sequence": "uav0000137_00458_v",
+      "gt_target_id": 156,
+      "rank": 1,
+      "occlusion_start": 60,
+      "first_source_frame": 30,
+      "class": 1,
+      "category": 2,
+      "gt_box_wh": [
+        51.0,
+        101.0
+      ],
+      "min_side_px": 51.0,
+      "status": "screened",
+      "detectors": {
+        "yolo11": {
+          "status": "locked",
+          "selected_track_id": 27,
+          "selected_frame_idx": 0,
+          "selected_iou": 0.6185182923422958,
+          "selected_class": 9,
+          "class_matches_gt": false,
+          "lock_ious": [
+            0.5935612561706086,
+            0.5711851442604965,
+            0.5232851202606702
+          ],
+          "best_iou": 0.8296830453342968,
+          "frames_with_match": 30,
+          "frames_with_gt": 30,
+          "tracks_sha256": "6c64352e84cea3e04dd4ace1734e0656080907139bcf754db5e7199b694624e1"
+        },
+        "yolo26": {
+          "status": "locked",
+          "selected_track_id": 106,
+          "selected_frame_idx": 3,
+          "selected_iou": 0.7120003151501734,
+          "selected_class": 9,
+          "class_matches_gt": false,
+          "lock_ious": [
+            0.6983036575098032,
+            0.6025969959511287,
+            0.5977116294132983
+          ],
+          "best_iou": 0.8829823961445831,
+          "frames_with_match": 27,
+          "frames_with_gt": 30,
+          "tracks_sha256": "cb95db21657d253977de0d8f1d2163954b61598b2ba051d2cd846b6bf681a82e"
+        }
+      },
+      "eligible": true
+    },
+    {
+      "candidate_id": "uav0000137_00458_v__t9",
+      "sequence": "uav0000137_00458_v",
+      "gt_target_id": 9,
+      "rank": 2,
+      "occlusion_start": 43,
+      "first_source_frame": 13,
+      "class": 3,
+      "category": 4,
+      "gt_box_wh": [
+        171.0,
+        85.0
+      ],
+      "min_side_px": 85.0,
+      "status": "screened",
+      "detectors": {
+        "yolo11": {
+          "status": "locked",
+          "selected_track_id": 18,
+          "selected_frame_idx": 0,
+          "selected_iou": 0.9534667221217363,
+          "selected_class": 3,
+          "class_matches_gt": true,
+          "lock_ious": [
+            0.9387198297834386,
+            0.9465383186561751,
+            0.9346703809309709
+          ],
+          "best_iou": 0.9534667221217363,
+          "frames_with_match": 30,
+          "frames_with_gt": 30,
+          "tracks_sha256": "f9f2409ee4d5dc37211f1a37a7c79f4c8f1a45a261de9ba29de05d65e93b5846"
+        },
+        "yolo26": {
+          "status": "locked",
+          "selected_track_id": 7,
+          "selected_frame_idx": 0,
+          "selected_iou": 0.9406327962164632,
+          "selected_class": 3,
+          "class_matches_gt": true,
+          "lock_ious": [
+            0.9237246235741517,
+            0.9020132482224851,
+            0.9028789055845294
+          ],
+          "best_iou": 0.9441770709049456,
+          "frames_with_match": 30,
+          "frames_with_gt": 30,
+          "tracks_sha256": "07432eb9f9fb728f7f23b6f08f2995bd849a9d84a250300e2151091ece07b152"
+        }
+      },
+      "eligible": true
+    },
+    {
+      "candidate_id": "uav0000137_00458_v__t18",
+      "sequence": "uav0000137_00458_v",
+      "gt_target_id": 18,
+      "rank": 3,
+      "occlusion_start": 100,
+      "first_source_frame": 70,
+      "class": 3,
+      "category": 4,
+      "gt_box_wh": [
+        273.0,
+        159.0
+      ],
+      "min_side_px": 159.0,
+      "status": "screened",
+      "detectors": {
+        "yolo11": {
+          "status": "locked",
+          "selected_track_id": 1,
+          "selected_frame_idx": 0,
+          "selected_iou": 0.9000883642659706,
+          "selected_class": 3,
+          "class_matches_gt": true,
+          "lock_ious": [
+            0.9135528427138708,
+            0.90412374176028,
+            0.9131034513311133
+          ],
+          "best_iou": 0.9135528427138708,
+          "frames_with_match": 30,
+          "frames_with_gt": 30,
+          "tracks_sha256": "5bbe21e52b8831ae8dc2c0721f944a57e57c46c998851e94a8d9309cacfca7d9"
+        },
+        "yolo26": {
+          "status": "locked",
+          "selected_track_id": 1,
+          "selected_frame_idx": 0,
+          "selected_iou": 0.9152788083926835,
+          "selected_class": 3,
+          "class_matches_gt": true,
+          "lock_ious": [
+            0.9261070597365586,
+            0.9298689708382507,
+            0.9364490291104813
+          ],
+          "best_iou": 0.9364490291104813,
+          "frames_with_match": 30,
+          "frames_with_gt": 30,
+          "tracks_sha256": "31e5011d1d25ac95eb42669800a2704a14aecf45d910211bec0414c6dd941b2c"
+        }
+      },
+      "eligible": true
+    },
+    {
+      "candidate_id": "uav0000137_00458_v__t169",
+      "sequence": "uav0000137_00458_v",
+      "gt_target_id": 169,
+      "rank": 4,
+      "occlusion_start": 104,
+      "first_source_frame": 74,
+      "class": 4,
+      "category": 5,
+      "gt_box_wh": [
+        111.0,
+        75.0
+      ],
+      "min_side_px": 75.0,
+      "status": "screened",
+      "detectors": {
+        "yolo11": {
+          "status": "not_selected",
+          "selected_track_id": null,
+          "selected_frame_idx": null,
+          "selected_iou": null,
+          "selected_class": null,
+          "class_matches_gt": null,
+          "lock_ious": [],
+          "best_iou": 0.0,
+          "frames_with_match": 0,
+          "frames_with_gt": 30,
+          "tracks_sha256": "63361c621d155946dc593bb95001b190b13e6e1f3642079a8e3c2aacab443f59"
+        },
+        "yolo26": {
+          "status": "not_selected",
+          "selected_track_id": null,
+          "selected_frame_idx": null,
+          "selected_iou": null,
+          "selected_class": null,
+          "class_matches_gt": null,
+          "lock_ious": [],
+          "best_iou": 0.0,
+          "frames_with_match": 0,
+          "frames_with_gt": 30,
+          "tracks_sha256": "4e4948cd704ce5c4f4638759b524d994410a26dc897a8a00e7f2fbf3cc2c0759"
+        }
+      },
+      "eligible": false
+    },
+    {
+      "candidate_id": "uav0000137_00458_v__t12",
+      "sequence": "uav0000137_00458_v",
+      "gt_target_id": 12,
+      "rank": 5,
+      "occlusion_start": 94,
+      "first_source_frame": 64,
+      "class": 3,
+      "category": 4,
+      "gt_box_wh": [
+        154.0,
+        162.0
+      ],
+      "min_side_px": 154.0,
+      "status": "screened",
+      "detectors": {
+        "yolo11": {
+          "status": "locked",
+          "selected_track_id": 7,
+          "selected_frame_idx": 0,
+          "selected_iou": 0.8776596683243709,
+          "selected_class": 3,
+          "class_matches_gt": true,
+          "lock_ious": [
+            0.8644739316333804,
+            0.8788860952784752,
+            0.8748078650835389
+          ],
+          "best_iou": 0.8989684430151254,
+          "frames_with_match": 30,
+          "frames_with_gt": 30,
+          "tracks_sha256": "c0703afd2a6e2ed666012f3aa861cca8f65f04b306326a0aa3eb37e4c24f80c8"
+        },
+        "yolo26": {
+          "status": "locked",
+          "selected_track_id": 6,
+          "selected_frame_idx": 0,
+          "selected_iou": 0.8901083257831173,
+          "selected_class": 3,
+          "class_matches_gt": true,
+          "lock_ious": [
+            0.8938154910856233,
+            0.8926764501276501,
+            0.8780838134764316
+          ],
+          "best_iou": 0.9084928557216997,
+          "frames_with_match": 30,
+          "frames_with_gt": 30,
+          "tracks_sha256": "86306bd0896e56dc49a34bf312ab76fa2db0bcf1ae7b99a95647c23196477da1"
+        }
+      },
+      "eligible": true
+    },
+    {
+      "candidate_id": "uav0000137_00458_v__t13",
+      "sequence": "uav0000137_00458_v",
+      "gt_target_id": 13,
+      "rank": 6,
+      "occlusion_start": 106,
+      "first_source_frame": 76,
+      "class": 3,
+      "category": 4,
+      "gt_box_wh": [
+        196.0,
+        132.0
+      ],
+      "min_side_px": 132.0,
+      "status": "screened",
+      "detectors": {
+        "yolo11": {
+          "status": "locked",
+          "selected_track_id": 8,
+          "selected_frame_idx": 0,
+          "selected_iou": 0.8467651969572143,
+          "selected_class": 3,
+          "class_matches_gt": true,
+          "lock_ious": [
+            0.917126935991374,
+            0.9156747757553382,
+            0.9261656482502398
+          ],
+          "best_iou": 0.9376449439365792,
+          "frames_with_match": 30,
+          "frames_with_gt": 30,
+          "tracks_sha256": "ff136df6ac37666e7519bab98a899b02e0b9efc1770a81a111cc082aeba868b9"
+        },
+        "yolo26": {
+          "status": "locked",
+          "selected_track_id": 3,
+          "selected_frame_idx": 0,
+          "selected_iou": 0.9100081454439454,
+          "selected_class": 3,
+          "class_matches_gt": true,
+          "lock_ious": [
+            0.9339353415482226,
+            0.9244728772598837,
+            0.9190363336613375
+          ],
+          "best_iou": 0.954129040220507,
+          "frames_with_match": 30,
+          "frames_with_gt": 30,
+          "tracks_sha256": "dfce5ad1b9e190d9983748b8843541d9c1666659ba5da34a2cb6bb061f558f97"
+        }
+      },
+      "eligible": true
+    },
+    {
+      "candidate_id": "uav0000137_00458_v__t16",
+      "sequence": "uav0000137_00458_v",
+      "gt_target_id": 16,
+      "rank": 7,
+      "occlusion_start": 33,
+      "first_source_frame": 3,
+      "class": 3,
+      "category": 4,
+      "gt_box_wh": [
+        225.0,
+        107.0
+      ],
+      "min_side_px": 107.0,
+      "status": "screened",
+      "detectors": {
+        "yolo11": {
+          "status": "locked",
+          "selected_track_id": 15,
+          "selected_frame_idx": 0,
+          "selected_iou": 0.902490648859673,
+          "selected_class": 3,
+          "class_matches_gt": true,
+          "lock_ious": [
+            0.8722442458863608,
+            0.8679741079556575,
+            0.8815918575976188
+          ],
+          "best_iou": 0.902490648859673,
+          "frames_with_match": 30,
+          "frames_with_gt": 30,
+          "tracks_sha256": "76478372dd17ed731b3b69cb103222ae467f7a0e2236477015295538381225e9"
+        },
+        "yolo26": {
+          "status": "locked",
+          "selected_track_id": 10,
+          "selected_frame_idx": 0,
+          "selected_iou": 0.8885014962740723,
+          "selected_class": 3,
+          "class_matches_gt": true,
+          "lock_ious": [
+            0.8889430370318921,
+            0.8837465491370561,
+            0.8648491937517846
+          ],
+          "best_iou": 0.9008184641027901,
+          "frames_with_match": 30,
+          "frames_with_gt": 30,
+          "tracks_sha256": "73d9adc2525593a45ca191e1bd2a6ebf9a907129449384855e667b613a87ac40"
+        }
+      },
+      "eligible": true
+    },
+    {
+      "candidate_id": "uav0000137_00458_v__t69",
+      "sequence": "uav0000137_00458_v",
+      "gt_target_id": 69,
+      "rank": 8,
+      "occlusion_start": 48,
+      "first_source_frame": 18,
+      "class": 3,
+      "category": 4,
+      "gt_box_wh": [
+        82.0,
+        65.0
+      ],
+      "min_side_px": 65.0,
+      "status": "screened",
+      "detectors": {
+        "yolo11": {
+          "status": "not_selected",
+          "selected_track_id": null,
+          "selected_frame_idx": null,
+          "selected_iou": null,
+          "selected_class": null,
+          "class_matches_gt": null,
+          "lock_ious": [],
+          "best_iou": 0.17706670508764716,
+          "frames_with_match": 0,
+          "frames_with_gt": 30,
+          "tracks_sha256": "c5f1d69ad8de380fdde1d5ecc6a6876c184b10971c8ff06349ef7101c3fb1e59"
+        },
+        "yolo26": {
+          "status": "lost_before_occlusion",
+          "selected_track_id": 90,
+          "selected_frame_idx": 2,
+          "selected_iou": 0.6708511723695431,
+          "selected_class": 3,
+          "class_matches_gt": true,
+          "lock_ious": [
+            null,
+            0.6283143788855697,
+            0.6293547443807908
+          ],
+          "best_iou": 0.7051425235566122,
+          "frames_with_match": 18,
+          "frames_with_gt": 30,
+          "tracks_sha256": "b54463899e061944cc5ad60cbf36f4899a5b7a53026e794182e830c4427c4422"
+        }
+      },
+      "eligible": false
+    },
+    {
+      "candidate_id": "uav0000137_00458_v__t68",
+      "sequence": "uav0000137_00458_v",
+      "gt_target_id": 68,
+      "rank": 9,
+      "occlusion_start": 45,
+      "first_source_frame": 15,
+      "class": 3,
+      "category": 4,
+      "gt_box_wh": [
+        92.0,
+        58.0
+      ],
+      "min_side_px": 58.0,
+      "status": "screened",
+      "detectors": {
+        "yolo11": {
+          "status": "lost_before_occlusion",
+          "selected_track_id": 64,
+          "selected_frame_idx": 0,
+          "selected_iou": 0.6242549238586291,
+          "selected_class": 3,
+          "class_matches_gt": true,
+          "lock_ious": [
+            null,
+            null,
+            null
+          ],
+          "best_iou": 0.7517261697208697,
+          "frames_with_match": 15,
+          "frames_with_gt": 30,
+          "tracks_sha256": "67313dd6e959b3ad59f3583a84df30d8e426b49170ab3015a32ef3794714ec12"
+        },
+        "yolo26": {
+          "status": "lost_before_occlusion",
+          "selected_track_id": 75,
+          "selected_frame_idx": 6,
+          "selected_iou": 0.6232563528711428,
+          "selected_class": 3,
+          "class_matches_gt": true,
+          "lock_ious": [
+            0.22361588908024238,
+            0.23143106582547923,
+            0.2672501404962217
+          ],
+          "best_iou": 0.6659525940643379,
+          "frames_with_match": 2,
+          "frames_with_gt": 30,
+          "tracks_sha256": "9149781717a5aa42472e97429fec4e105ad89be6d4cb512ccdfbfcccd6cb21e7"
+        }
+      },
+      "eligible": false
+    },
+    {
+      "candidate_id": "uav0000137_00458_v__t82",
+      "sequence": "uav0000137_00458_v",
+      "gt_target_id": 82,
+      "rank": 10,
+      "occlusion_start": 67,
+      "first_source_frame": 37,
+      "class": 2,
+      "category": 3,
+      "gt_box_wh": [
+        73.0,
+        50.0
+      ],
+      "min_side_px": 50.0,
+      "status": "screened",
+      "detectors": {
+        "yolo11": {
+          "status": "not_selected",
+          "selected_track_id": null,
+          "selected_frame_idx": null,
+          "selected_iou": null,
+          "selected_class": null,
+          "class_matches_gt": null,
+          "lock_ious": [],
+          "best_iou": 0.3534871241105112,
+          "frames_with_match": 0,
+          "frames_with_gt": 30,
+          "tracks_sha256": "0f905a3c66ce28288b76b69c8e553a96ba8ae520a1088c62ce7dc9db7436cc1a"
+        },
+        "yolo26": {
+          "status": "not_selected",
+          "selected_track_id": null,
+          "selected_frame_idx": null,
+          "selected_iou": null,
+          "selected_class": null,
+          "class_matches_gt": null,
+          "lock_ious": [],
+          "best_iou": 0.34227429100164236,
+          "frames_with_match": 0,
+          "frames_with_gt": 30,
+          "tracks_sha256": "32c5ce21d6b64c1ec4e0d090d4020494e39807bb2d80336968f173695464f7ae"
+        }
+      },
+      "eligible": false
+    },
+    {
+      "candidate_id": "uav0000137_00458_v__t44",
+      "sequence": "uav0000137_00458_v",
+      "gt_target_id": 44,
+      "rank": 11,
+      "occlusion_start": 94,
+      "first_source_frame": 64,
+      "class": 2,
+      "category": 3,
+      "gt_box_wh": [
+        50.0,
+        90.0
+      ],
+      "min_side_px": 50.0,
+      "status": "screened",
+      "detectors": {
+        "yolo11": {
+          "status": "locked",
+          "selected_track_id": 61,
+          "selected_frame_idx": 0,
+          "selected_iou": 0.7925688653436094,
+          "selected_class": 9,
+          "class_matches_gt": false,
+          "lock_ious": [
+            0.8204021453428787,
+            0.8263715920901619,
+            0.838011243823136
+          ],
+          "best_iou": 0.8534418271542881,
+          "frames_with_match": 30,
+          "frames_with_gt": 30,
+          "tracks_sha256": "985197cd2d20c4f1d2e159f1b6cc569aae09156f5e38297952b35765516e91f2"
+        },
+        "yolo26": {
+          "status": "locked",
+          "selected_track_id": 92,
+          "selected_frame_idx": 0,
+          "selected_iou": 0.7292170156989151,
+          "selected_class": 9,
+          "class_matches_gt": false,
+          "lock_ious": [
+            0.7690607381293321,
+            0.7790462279102535,
+            0.7811914293435868
+          ],
+          "best_iou": 0.8632742581446698,
+          "frames_with_match": 27,
+          "frames_with_gt": 30,
+          "tracks_sha256": "0b13cd92e56e05319640f2ebf7cf8c3f4fd94c745e8235cb50d3f9a32a048f6b"
+        }
+      },
+      "eligible": true
+    },
+    {
+      "candidate_id": "uav0000182_00000_v__t128",
+      "sequence": "uav0000182_00000_v",
+      "gt_target_id": 128,
+      "rank": 0,
+      "occlusion_start": 212,
+      "first_source_frame": 182,
+      "class": 4,
+      "category": 5,
+      "gt_box_wh": [
+        62.0,
+        29.0
+      ],
+      "min_side_px": 29.0,
+      "status": "screened",
+      "detectors": {
+        "yolo11": {
+          "status": "locked",
+          "selected_track_id": 37,
+          "selected_frame_idx": 5,
+          "selected_iou": 0.908802095125691,
+          "selected_class": 4,
+          "class_matches_gt": true,
+          "lock_ious": [
+            0.7155420041040808,
+            0.7012932758428877,
+            0.7245745412130163
+          ],
+          "best_iou": 0.9202796732318769,
+          "frames_with_match": 25,
+          "frames_with_gt": 30,
+          "tracks_sha256": "8d6cd13ea3f63d2972900b9acef6a953a5f026ae300e46b1266959862a06ccb3"
+        },
+        "yolo26": {
+          "status": "locked",
+          "selected_track_id": 5,
+          "selected_frame_idx": 0,
+          "selected_iou": 0.8652174720421874,
+          "selected_class": 4,
+          "class_matches_gt": true,
+          "lock_ious": [
+            0.7753069958306424,
+            0.7392943197568875,
+            0.7735197279454185
+          ],
+          "best_iou": 0.9225297578237557,
+          "frames_with_match": 30,
+          "frames_with_gt": 30,
+          "tracks_sha256": "3d153dfe4133d405acc86773936828726ffda75d22b78f6c2779085620ba5958"
+        }
+      },
+      "eligible": true
+    },
+    {
+      "candidate_id": "uav0000182_00000_v__t66",
+      "sequence": "uav0000182_00000_v",
+      "gt_target_id": 66,
+      "rank": 1,
+      "occlusion_start": 194,
+      "first_source_frame": 164,
+      "class": 3,
+      "category": 4,
+      "gt_box_wh": [
+        22.0,
+        25.0
+      ],
+      "min_side_px": 22.0,
+      "status": "screened",
+      "detectors": {
+        "yolo11": {
+          "status": "not_selected",
+          "selected_track_id": null,
+          "selected_frame_idx": null,
+          "selected_iou": null,
+          "selected_class": null,
+          "class_matches_gt": null,
+          "lock_ious": [],
+          "best_iou": 0.0,
+          "frames_with_match": 0,
+          "frames_with_gt": 30,
+          "tracks_sha256": "2971362d41b97225433abfd55a9b0dc31312572991f576d173cf9ebba0da8456"
+        },
+        "yolo26": {
+          "status": "not_selected",
+          "selected_track_id": null,
+          "selected_frame_idx": null,
+          "selected_iou": null,
+          "selected_class": null,
+          "class_matches_gt": null,
+          "lock_ious": [],
+          "best_iou": 0.28459395697588785,
+          "frames_with_match": 0,
+          "frames_with_gt": 30,
+          "tracks_sha256": "a14c25e41ae07828740c482e8aae7f122203bcb2c2827fcefbc5622a95f661b7"
+        }
+      },
+      "eligible": false
+    },
+    {
+      "candidate_id": "uav0000182_00000_v__t49",
+      "sequence": "uav0000182_00000_v",
+      "gt_target_id": 49,
+      "rank": 2,
+      "occlusion_start": 117,
+      "first_source_frame": 87,
+      "class": 9,
+      "category": 10,
+      "gt_box_wh": [
+        18.0,
+        20.0
+      ],
+      "min_side_px": 18.0,
+      "status": "screened",
+      "detectors": {
+        "yolo11": {
+          "status": "not_selected",
+          "selected_track_id": null,
+          "selected_frame_idx": null,
+          "selected_iou": null,
+          "selected_class": null,
+          "class_matches_gt": null,
+          "lock_ious": [],
+          "best_iou": 0.0,
+          "frames_with_match": 0,
+          "frames_with_gt": 30,
+          "tracks_sha256": "b36ceb39ea69924add69016080e5eaaf751826cd27182033b4fbb0cc5e1c85d4"
+        },
+        "yolo26": {
+          "status": "not_selected",
+          "selected_track_id": null,
+          "selected_frame_idx": null,
+          "selected_iou": null,
+          "selected_class": null,
+          "class_matches_gt": null,
+          "lock_ious": [],
+          "best_iou": 0.08571627930080172,
+          "frames_with_match": 0,
+          "frames_with_gt": 30,
+          "tracks_sha256": "e69cffc9bf8d83dcf93ea8c0b0103f286b720e721a553fcbfc10c85f881f1740"
+        }
+      },
+      "eligible": false
+    },
+    {
+      "candidate_id": "uav0000182_00000_v__t86",
+      "sequence": "uav0000182_00000_v",
+      "gt_target_id": 86,
+      "rank": 3,
+      "occlusion_start": 92,
+      "first_source_frame": 62,
+      "class": 6,
+      "category": 7,
+      "gt_box_wh": [
+        33.0,
+        53.0
+      ],
+      "min_side_px": 33.0,
+      "status": "screened",
+      "detectors": {
+        "yolo11": {
+          "status": "not_selected",
+          "selected_track_id": null,
+          "selected_frame_idx": null,
+          "selected_iou": null,
+          "selected_class": null,
+          "class_matches_gt": null,
+          "lock_ious": [],
+          "best_iou": 0.0,
+          "frames_with_match": 0,
+          "frames_with_gt": 30,
+          "tracks_sha256": "8e01b1b014a106e65e239773b671fc16c89ab79ff308248a0d20f6130599576a"
+        },
+        "yolo26": {
+          "status": "not_selected",
+          "selected_track_id": null,
+          "selected_frame_idx": null,
+          "selected_iou": null,
+          "selected_class": null,
+          "class_matches_gt": null,
+          "lock_ious": [],
+          "best_iou": 0.0,
+          "frames_with_match": 0,
+          "frames_with_gt": 30,
+          "tracks_sha256": "325a9f66edc3482e33ae3a1f4c820b36f8cd668c423b0e055e272ea00f93e8ad"
+        }
+      },
+      "eligible": false
+    },
+    {
+      "candidate_id": "uav0000182_00000_v__t102",
+      "sequence": "uav0000182_00000_v",
+      "gt_target_id": 102,
+      "rank": 4,
+      "occlusion_start": 175,
+      "first_source_frame": 145,
+      "class": 3,
+      "category": 4,
+      "gt_box_wh": [
+        33.0,
+        17.0
+      ],
+      "min_side_px": 17.0,
+      "status": "screened",
+      "detectors": {
+        "yolo11": {
+          "status": "not_selected",
+          "selected_track_id": null,
+          "selected_frame_idx": null,
+          "selected_iou": null,
+          "selected_class": null,
+          "class_matches_gt": null,
+          "lock_ious": [],
+          "best_iou": 0.0,
+          "frames_with_match": 0,
+          "frames_with_gt": 30,
+          "tracks_sha256": "8eafe03bd02e5ecf5cf0af47a89aa623a612c1a68113cbec335a95c05ab4f513"
+        },
+        "yolo26": {
+          "status": "not_selected",
+          "selected_track_id": null,
+          "selected_frame_idx": null,
+          "selected_iou": null,
+          "selected_class": null,
+          "class_matches_gt": null,
+          "lock_ious": [],
+          "best_iou": 0.16570894107790898,
+          "frames_with_match": 0,
+          "frames_with_gt": 30,
+          "tracks_sha256": "5396163288a53f8ce5ad756d5c202593d4fc926cb3655231f4c155ac57a45f3b"
+        }
+      },
+      "eligible": false
+    },
+    {
+      "candidate_id": "uav0000182_00000_v__t72",
+      "sequence": "uav0000182_00000_v",
+      "gt_target_id": 72,
+      "rank": 5,
+      "occlusion_start": 87,
+      "first_source_frame": 57,
+      "class": 7,
+      "category": 8,
+      "gt_box_wh": [
+        37.0,
+        75.0
+      ],
+      "min_side_px": 37.0,
+      "status": "screened",
+      "detectors": {
+        "yolo11": {
+          "status": "locked",
+          "selected_track_id": 16,
+          "selected_frame_idx": 0,
+          "selected_iou": 0.8829352883365361,
+          "selected_class": 6,
+          "class_matches_gt": false,
+          "lock_ious": [
+            0.8102900186093254,
+            0.8426553503805089,
+            0.829633104514461
+          ],
+          "best_iou": 0.9004781939120278,
+          "frames_with_match": 30,
+          "frames_with_gt": 30,
+          "tracks_sha256": "f37e2b96ebaabd29b3e56742e2b47f5d81a12e35f9fb771c3fba4b9be2053654"
+        },
+        "yolo26": {
+          "status": "locked",
+          "selected_track_id": 1,
+          "selected_frame_idx": 0,
+          "selected_iou": 0.877383440581361,
+          "selected_class": 6,
+          "class_matches_gt": false,
+          "lock_ious": [
+            0.8478250037496154,
+            0.8512755729644387,
+            0.8134021190533767
+          ],
+          "best_iou": 0.8975953712261702,
+          "frames_with_match": 30,
+          "frames_with_gt": 30,
+          "tracks_sha256": "e352c8787037a0ca4081bbd59e0eb40b686b8548a869a7f2fc96a9ed6ea0ca32"
+        }
+      },
+      "eligible": true
+    },
+    {
+      "candidate_id": "uav0000182_00000_v__t111",
+      "sequence": "uav0000182_00000_v",
+      "gt_target_id": 111,
+      "rank": 6,
+      "occlusion_start": 172,
+      "first_source_frame": 142,
+      "class": 4,
+      "category": 5,
+      "gt_box_wh": [
+        41.0,
+        26.0
+      ],
+      "min_side_px": 26.0,
+      "status": "screened",
+      "detectors": {
+        "yolo11": {
+          "status": "not_selected",
+          "selected_track_id": null,
+          "selected_frame_idx": null,
+          "selected_iou": null,
+          "selected_class": null,
+          "class_matches_gt": null,
+          "lock_ious": [],
+          "best_iou": 0.0,
+          "frames_with_match": 0,
+          "frames_with_gt": 30,
+          "tracks_sha256": "dbd4108afe8e55d879021d6487509a6d61fd8de36e6a6dc11b217a2fbc85aa42"
+        },
+        "yolo26": {
+          "status": "not_selected",
+          "selected_track_id": null,
+          "selected_frame_idx": null,
+          "selected_iou": null,
+          "selected_class": null,
+          "class_matches_gt": null,
+          "lock_ious": [],
+          "best_iou": 0.10454584127504292,
+          "frames_with_match": 0,
+          "frames_with_gt": 30,
+          "tracks_sha256": "49cce0e947f59ef67d480ca7dfd23d04b1f08f2969bed9b1b15d8b7b342c581b"
+        }
+      },
+      "eligible": false
+    },
+    {
+      "candidate_id": "uav0000182_00000_v__t39",
+      "sequence": "uav0000182_00000_v",
+      "gt_target_id": 39,
+      "rank": 7,
+      "occlusion_start": 89,
+      "first_source_frame": 59,
+      "class": 3,
+      "category": 4,
+      "gt_box_wh": [
+        25.0,
+        20.0
+      ],
+      "min_side_px": 20.0,
+      "status": "screened",
+      "detectors": {
+        "yolo11": {
+          "status": "not_selected",
+          "selected_track_id": null,
+          "selected_frame_idx": null,
+          "selected_iou": null,
+          "selected_class": null,
+          "class_matches_gt": null,
+          "lock_ious": [],
+          "best_iou": 0.0,
+          "frames_with_match": 0,
+          "frames_with_gt": 30,
+          "tracks_sha256": "4164f28d9463cfab274be1224da7db131c9051f7c18d1b0ee4413571b15ee800"
+        },
+        "yolo26": {
+          "status": "lost_before_occlusion",
+          "selected_track_id": 18,
+          "selected_frame_idx": 6,
+          "selected_iou": 0.571281779654069,
+          "selected_class": 3,
+          "class_matches_gt": true,
+          "lock_ious": [
+            0.20026644340222388,
+            0.21070818165679803,
+            0.2058833414148402
+          ],
+          "best_iou": 0.6884017906239014,
+          "frames_with_match": 6,
+          "frames_with_gt": 30,
+          "tracks_sha256": "6409b8936bf485cd77dd72b013086106a8d9c3f9a5cbd0410495e506e43b9b99"
+        }
+      },
+      "eligible": false
+    },
+    {
+      "candidate_id": "uav0000182_00000_v__t112",
+      "sequence": "uav0000182_00000_v",
+      "gt_target_id": 112,
+      "rank": 8,
+      "occlusion_start": 180,
+      "first_source_frame": 150,
+      "class": 3,
+      "category": 4,
+      "gt_box_wh": [
+        38.0,
+        28.0
+      ],
+      "min_side_px": 28.0,
+      "status": "screened",
+      "detectors": {
+        "yolo11": {
+          "status": "not_selected",
+          "selected_track_id": null,
+          "selected_frame_idx": null,
+          "selected_iou": null,
+          "selected_class": null,
+          "class_matches_gt": null,
+          "lock_ious": [],
+          "best_iou": 0.0,
+          "frames_with_match": 0,
+          "frames_with_gt": 30,
+          "tracks_sha256": "126ca7f090619a01108c817dc3000b37265bf863dc99236df621bb0ac85b70b2"
+        },
+        "yolo26": {
+          "status": "not_selected",
+          "selected_track_id": null,
+          "selected_frame_idx": null,
+          "selected_iou": null,
+          "selected_class": null,
+          "class_matches_gt": null,
+          "lock_ious": [],
+          "best_iou": 0.4268428518854416,
+          "frames_with_match": 0,
+          "frames_with_gt": 30,
+          "tracks_sha256": "dfd5c7311298a8ac28cc0479900cdb5e3850231fdbecd3e1138e33953f35507c"
+        }
+      },
+      "eligible": false
+    },
+    {
+      "candidate_id": "uav0000182_00000_v__t103",
+      "sequence": "uav0000182_00000_v",
+      "gt_target_id": 103,
+      "rank": 9,
+      "occlusion_start": 207,
+      "first_source_frame": 177,
+      "class": 3,
+      "category": 4,
+      "gt_box_wh": [
+        37.0,
+        21.0
+      ],
+      "min_side_px": 21.0,
+      "status": "screened",
+      "detectors": {
+        "yolo11": {
+          "status": "not_selected",
+          "selected_track_id": null,
+          "selected_frame_idx": null,
+          "selected_iou": null,
+          "selected_class": null,
+          "class_matches_gt": null,
+          "lock_ious": [],
+          "best_iou": 0.0,
+          "frames_with_match": 0,
+          "frames_with_gt": 30,
+          "tracks_sha256": "0ba70cec8adbbae297309dbb01fdfd886c2a128f4cc26e7af465e0dd2e84cca8"
+        },
+        "yolo26": {
+          "status": "not_selected",
+          "selected_track_id": null,
+          "selected_frame_idx": null,
+          "selected_iou": null,
+          "selected_class": null,
+          "class_matches_gt": null,
+          "lock_ious": [],
+          "best_iou": 0.0,
+          "frames_with_match": 0,
+          "frames_with_gt": 30,
+          "tracks_sha256": "e2ba1325a57a89623b0b012cdcd700b1f36cea51ceb9834507691928e1b16298"
+        }
+      },
+      "eligible": false
+    },
+    {
+      "candidate_id": "uav0000182_00000_v__t9",
+      "sequence": "uav0000182_00000_v",
+      "gt_target_id": 9,
+      "rank": 10,
+      "occlusion_start": 68,
+      "first_source_frame": 38,
+      "class": 3,
+      "category": 4,
+      "gt_box_wh": [
+        27.0,
+        36.0
+      ],
+      "min_side_px": 27.0,
+      "status": "screened",
+      "detectors": {
+        "yolo11": {
+          "status": "locked",
+          "selected_track_id": 20,
+          "selected_frame_idx": 0,
+          "selected_iou": 0.5720671258216934,
+          "selected_class": 3,
+          "class_matches_gt": true,
+          "lock_ious": [
+            0.6460091230623921,
+            0.6643058732530306,
+            0.6688544252886476
+          ],
+          "best_iou": 0.7505163951376571,
+          "frames_with_match": 24,
+          "frames_with_gt": 30,
+          "tracks_sha256": "6abacc2862d0fb6630f25d54c1574fb45ea3607dbae44b17bb8ce6fa83eb8727"
+        },
+        "yolo26": {
+          "status": "locked",
+          "selected_track_id": 10,
+          "selected_frame_idx": 0,
+          "selected_iou": 0.5476393973609088,
+          "selected_class": 3,
+          "class_matches_gt": true,
+          "lock_ious": [
+            0.6053969341544064,
+            0.650858908268012,
+            0.6429542750706722
+          ],
+          "best_iou": 0.6949709390437905,
+          "frames_with_match": 25,
+          "frames_with_gt": 30,
+          "tracks_sha256": "f7be27cc4a9c686e04e399527dd9c44eb40f40682d23a709da3e5a40675fbfd9"
+        }
+      },
+      "eligible": true
+    },
+    {
+      "candidate_id": "uav0000182_00000_v__t91",
+      "sequence": "uav0000182_00000_v",
+      "gt_target_id": 91,
+      "rank": 11,
+      "occlusion_start": 200,
+      "first_source_frame": 170,
+      "class": 3,
+      "category": 4,
+      "gt_box_wh": [
+        74.0,
+        30.0
+      ],
+      "min_side_px": 30.0,
+      "status": "screened",
+      "detectors": {
+        "yolo11": {
+          "status": "lost_before_occlusion",
+          "selected_track_id": 21,
+          "selected_frame_idx": 2,
+          "selected_iou": 0.6287051855395843,
+          "selected_class": 3,
+          "class_matches_gt": true,
+          "lock_ious": [
+            null,
+            null,
+            null
+          ],
+          "best_iou": 0.6620249195022021,
+          "frames_with_match": 8,
+          "frames_with_gt": 30,
+          "tracks_sha256": "764f3351442c6f9231501c5caf3d1d6842455f6dcbcf3b6325a8a5e22e545457"
+        },
+        "yolo26": {
+          "status": "lost_before_occlusion",
+          "selected_track_id": 7,
+          "selected_frame_idx": 0,
+          "selected_iou": 0.8003135222788041,
+          "selected_class": 3,
+          "class_matches_gt": true,
+          "lock_ious": [
+            null,
+            null,
+            null
+          ],
+          "best_iou": 0.8315658433223965,
+          "frames_with_match": 8,
+          "frames_with_gt": 30,
+          "tracks_sha256": "b6eb8749ce63ad0b0f233d9d7ae05508bf5c8d3fb922fe5225854192b11b43e3"
+        }
+      },
+      "eligible": false
+    },
+    {
+      "candidate_id": "uav0000268_05773_v__t40",
+      "sequence": "uav0000268_05773_v",
+      "gt_target_id": 40,
+      "rank": 0,
+      "occlusion_start": 787,
+      "first_source_frame": 757,
+      "class": 0,
+      "category": 1,
+      "gt_box_wh": [
+        20.0,
+        50.0
+      ],
+      "min_side_px": 20.0,
+      "status": "screened",
+      "detectors": {
+        "yolo11": {
+          "status": "not_selected",
+          "selected_track_id": null,
+          "selected_frame_idx": null,
+          "selected_iou": null,
+          "selected_class": null,
+          "class_matches_gt": null,
+          "lock_ious": [],
+          "best_iou": 0.0,
+          "frames_with_match": 0,
+          "frames_with_gt": 30,
+          "tracks_sha256": "c8cf55c927bea2a9806cbecb0607b00b68854a8c6310654f65fedd6c594682bc"
+        },
+        "yolo26": {
+          "status": "not_selected",
+          "selected_track_id": null,
+          "selected_frame_idx": null,
+          "selected_iou": null,
+          "selected_class": null,
+          "class_matches_gt": null,
+          "lock_ious": [],
+          "best_iou": 0.0,
+          "frames_with_match": 0,
+          "frames_with_gt": 30,
+          "tracks_sha256": "1fddfde66ba10f78606877d14b615d8ac8d019a1cb963bbc6743848dfd756448"
+        }
+      },
+      "eligible": false
+    },
+    {
+      "candidate_id": "uav0000268_05773_v__t19",
+      "sequence": "uav0000268_05773_v",
+      "gt_target_id": 19,
+      "rank": 1,
+      "occlusion_start": 310,
+      "first_source_frame": 280,
+      "class": 4,
+      "category": 5,
+      "gt_box_wh": [
+        145.0,
+        121.0
+      ],
+      "min_side_px": 121.0,
+      "status": "screened",
+      "detectors": {
+        "yolo11": {
+          "status": "locked",
+          "selected_track_id": 4,
+          "selected_frame_idx": 0,
+          "selected_iou": 0.946281595259622,
+          "selected_class": 4,
+          "class_matches_gt": true,
+          "lock_ious": [
+            0.7964444413919455,
+            0.7419583059252703,
+            0.6865588555389194
+          ],
+          "best_iou": 0.946281595259622,
+          "frames_with_match": 30,
+          "frames_with_gt": 30,
+          "tracks_sha256": "fd23a42973b716dd326f0e4641a42cb04261ede4ac7436e7de2d8b53a0eeda1a"
+        },
+        "yolo26": {
+          "status": "locked",
+          "selected_track_id": 2,
+          "selected_frame_idx": 0,
+          "selected_iou": 0.9269367393963944,
+          "selected_class": 4,
+          "class_matches_gt": true,
+          "lock_ious": [
+            0.7805862439913611,
+            0.7882088342212282,
+            0.7409105561511286
+          ],
+          "best_iou": 0.9269367393963944,
+          "frames_with_match": 30,
+          "frames_with_gt": 30,
+          "tracks_sha256": "bd9f4edc087afe7c8cb02c6bc8fd0525f8aa7e778e972b00ff89dc94b0e31695"
+        }
+      },
+      "eligible": true
+    },
+    {
+      "candidate_id": "uav0000268_05773_v__t47",
+      "sequence": "uav0000268_05773_v",
+      "gt_target_id": 47,
+      "rank": 2,
+      "occlusion_start": 637,
+      "first_source_frame": 607,
+      "class": 3,
+      "category": 4,
+      "gt_box_wh": [
+        35.0,
+        35.0
+      ],
+      "min_side_px": 35.0,
+      "status": "screened",
+      "detectors": {
+        "yolo11": {
+          "status": "not_selected",
+          "selected_track_id": null,
+          "selected_frame_idx": null,
+          "selected_iou": null,
+          "selected_class": null,
+          "class_matches_gt": null,
+          "lock_ious": [],
+          "best_iou": 0.0,
+          "frames_with_match": 0,
+          "frames_with_gt": 30,
+          "tracks_sha256": "24b89528d3d6fafb6db7d8b147a3e9fb6045c221b003d8effff1a5350e09c098"
+        },
+        "yolo26": {
+          "status": "not_selected",
+          "selected_track_id": null,
+          "selected_frame_idx": null,
+          "selected_iou": null,
+          "selected_class": null,
+          "class_matches_gt": null,
+          "lock_ious": [],
+          "best_iou": 0.0,
+          "frames_with_match": 0,
+          "frames_with_gt": 30,
+          "tracks_sha256": "8e5aab5a002bb00fdb6c60a16433e941a3e66282bd1e5f54f7b44ad9d12bb317"
+        }
+      },
+      "eligible": false
+    },
+    {
+      "candidate_id": "uav0000268_05773_v__t25",
+      "sequence": "uav0000268_05773_v",
+      "gt_target_id": 25,
+      "rank": 3,
+      "occlusion_start": 275,
+      "first_source_frame": 245,
+      "class": 1,
+      "category": 2,
+      "gt_box_wh": [
+        23.0,
+        35.0
+      ],
+      "min_side_px": 23.0,
+      "status": "screened",
+      "detectors": {
+        "yolo11": {
+          "status": "not_selected",
+          "selected_track_id": null,
+          "selected_frame_idx": null,
+          "selected_iou": null,
+          "selected_class": null,
+          "class_matches_gt": null,
+          "lock_ious": [],
+          "best_iou": 0.0,
+          "frames_with_match": 0,
+          "frames_with_gt": 30,
+          "tracks_sha256": "85bffcc1e052306642fc985fc26ce64c6e6be7fa51baa1dbb39ec181e89c5c67"
+        },
+        "yolo26": {
+          "status": "not_selected",
+          "selected_track_id": null,
+          "selected_frame_idx": null,
+          "selected_iou": null,
+          "selected_class": null,
+          "class_matches_gt": null,
+          "lock_ious": [],
+          "best_iou": 0.0,
+          "frames_with_match": 0,
+          "frames_with_gt": 30,
+          "tracks_sha256": "8e9a3e49806a8ac3459501db4acf36e57a660175c4aefb63f2b9405de0adc5b6"
+        }
+      },
+      "eligible": false
+    },
+    {
+      "candidate_id": "uav0000268_05773_v__t3",
+      "sequence": "uav0000268_05773_v",
+      "gt_target_id": 3,
+      "rank": 4,
+      "occlusion_start": 678,
+      "first_source_frame": 648,
+      "class": 6,
+      "category": 7,
+      "gt_box_wh": [
+        39.0,
+        33.0
+      ],
+      "min_side_px": 33.0,
+      "status": "screened",
+      "detectors": {
+        "yolo11": {
+          "status": "not_selected",
+          "selected_track_id": null,
+          "selected_frame_idx": null,
+          "selected_iou": null,
+          "selected_class": null,
+          "class_matches_gt": null,
+          "lock_ious": [],
+          "best_iou": 0.0,
+          "frames_with_match": 0,
+          "frames_with_gt": 30,
+          "tracks_sha256": "da074977b90e9c523ca3590a2702a4d6c78b4d440ee5d320495a30e59a5328e5"
+        },
+        "yolo26": {
+          "status": "not_selected",
+          "selected_track_id": null,
+          "selected_frame_idx": null,
+          "selected_iou": null,
+          "selected_class": null,
+          "class_matches_gt": null,
+          "lock_ious": [],
+          "best_iou": 0.0,
+          "frames_with_match": 0,
+          "frames_with_gt": 30,
+          "tracks_sha256": "34ba10b2df55119629ecf63b561ffa4e971e98e0069f5beb76e92055d370fba0"
+        }
+      },
+      "eligible": false
+    },
+    {
+      "candidate_id": "uav0000268_05773_v__t34",
+      "sequence": "uav0000268_05773_v",
+      "gt_target_id": 34,
+      "rank": 5,
+      "occlusion_start": 497,
+      "first_source_frame": 467,
+      "class": 6,
+      "category": 7,
+      "gt_box_wh": [
+        23.0,
+        23.0
+      ],
+      "min_side_px": 23.0,
+      "status": "screened",
+      "detectors": {
+        "yolo11": {
+          "status": "not_selected",
+          "selected_track_id": null,
+          "selected_frame_idx": null,
+          "selected_iou": null,
+          "selected_class": null,
+          "class_matches_gt": null,
+          "lock_ious": [],
+          "best_iou": 0.0,
+          "frames_with_match": 0,
+          "frames_with_gt": 30,
+          "tracks_sha256": "6d7ed3223509895663767208fe51cc08aeb851893bad1ac960231bfa09ce133c"
+        },
+        "yolo26": {
+          "status": "not_selected",
+          "selected_track_id": null,
+          "selected_frame_idx": null,
+          "selected_iou": null,
+          "selected_class": null,
+          "class_matches_gt": null,
+          "lock_ious": [],
+          "best_iou": 0.0,
+          "frames_with_match": 0,
+          "frames_with_gt": 30,
+          "tracks_sha256": "6617df944adc5140b93df9ccadf1c8db5e5c7221fba59a52a60d1cc45bee7862"
+        }
+      },
+      "eligible": false
+    },
+    {
+      "candidate_id": "uav0000268_05773_v__t39",
+      "sequence": "uav0000268_05773_v",
+      "gt_target_id": 39,
+      "rank": 6,
+      "occlusion_start": 782,
+      "first_source_frame": 752,
+      "class": 1,
+      "category": 2,
+      "gt_box_wh": [
+        22.0,
+        35.0
+      ],
+      "min_side_px": 22.0,
+      "status": "screened",
+      "detectors": {
+        "yolo11": {
+          "status": "not_selected",
+          "selected_track_id": null,
+          "selected_frame_idx": null,
+          "selected_iou": null,
+          "selected_class": null,
+          "class_matches_gt": null,
+          "lock_ious": [],
+          "best_iou": 0.0,
+          "frames_with_match": 0,
+          "frames_with_gt": 30,
+          "tracks_sha256": "ab4530c31feed5c8cae30ab8d87c57f3770db140c2df6afa12df74092be1acc0"
+        },
+        "yolo26": {
+          "status": "not_selected",
+          "selected_track_id": null,
+          "selected_frame_idx": null,
+          "selected_iou": null,
+          "selected_class": null,
+          "class_matches_gt": null,
+          "lock_ious": [],
+          "best_iou": 0.0,
+          "frames_with_match": 0,
+          "frames_with_gt": 30,
+          "tracks_sha256": "fed07859a56c2065ced4cda8c2ea51d8a1ffe1f8df3899cf1f78e530f1b9d3e2"
+        }
+      },
+      "eligible": false
+    },
+    {
+      "candidate_id": "uav0000268_05773_v__t46",
+      "sequence": "uav0000268_05773_v",
+      "gt_target_id": 46,
+      "rank": 7,
+      "occlusion_start": 724,
+      "first_source_frame": 694,
+      "class": 4,
+      "category": 5,
+      "gt_box_wh": [
+        69.0,
+        78.0
+      ],
+      "min_side_px": 69.0,
+      "status": "screened",
+      "detectors": {
+        "yolo11": {
+          "status": "locked",
+          "selected_track_id": 3,
+          "selected_frame_idx": 0,
+          "selected_iou": 0.7484399333776122,
+          "selected_class": 5,
+          "class_matches_gt": false,
+          "lock_ious": [
+            0.7361613425566286,
+            0.6909833528112811,
+            0.7245587340685559
+          ],
+          "best_iou": 0.8781103794602174,
+          "frames_with_match": 30,
+          "frames_with_gt": 30,
+          "tracks_sha256": "ed7d97da38025aac93323214e6cd86a35f83e25251989375592cdd0623de3408"
+        },
+        "yolo26": {
+          "status": "locked",
+          "selected_track_id": 5,
+          "selected_frame_idx": 0,
+          "selected_iou": 0.7762953931210088,
+          "selected_class": 5,
+          "class_matches_gt": false,
+          "lock_ious": [
+            0.6485198509089729,
+            0.6333365662573899,
+            0.6252171798773203
+          ],
+          "best_iou": 0.8000482759754609,
+          "frames_with_match": 30,
+          "frames_with_gt": 30,
+          "tracks_sha256": "a622d07b279986ff95830a313e8a855a35dda120f80076356429f1ee0c549d94"
+        }
+      },
+      "eligible": true
+    },
+    {
+      "candidate_id": "uav0000268_05773_v__t20",
+      "sequence": "uav0000268_05773_v",
+      "gt_target_id": 20,
+      "rank": 8,
+      "occlusion_start": 257,
+      "first_source_frame": 227,
+      "class": 4,
+      "category": 5,
+      "gt_box_wh": [
+        148.0,
+        114.0
+      ],
+      "min_side_px": 114.0,
+      "status": "screened",
+      "detectors": {
+        "yolo11": {
+          "status": "locked",
+          "selected_track_id": 3,
+          "selected_frame_idx": 0,
+          "selected_iou": 0.8642980997079042,
+          "selected_class": 5,
+          "class_matches_gt": false,
+          "lock_ious": [
+            0.7624062784502112,
+            0.7472789773022623,
+            0.7252020751302307
+          ],
+          "best_iou": 0.8642980997079042,
+          "frames_with_match": 30,
+          "frames_with_gt": 30,
+          "tracks_sha256": "46b550dae8e1f6ce7c77cc51d05ac7b3f569c3877d63802174c7fb06e75a6f6d"
+        },
+        "yolo26": {
+          "status": "locked",
+          "selected_track_id": 3,
+          "selected_frame_idx": 0,
+          "selected_iou": 0.8658861073195232,
+          "selected_class": 4,
+          "class_matches_gt": true,
+          "lock_ious": [
+            0.7775427100461879,
+            0.7480540711499643,
+            0.7670973847549976
+          ],
+          "best_iou": 0.8659050570373004,
+          "frames_with_match": 30,
+          "frames_with_gt": 30,
+          "tracks_sha256": "6242974bc71a99f09c7d6999d6f8de0089ec823470fb89880e724d211b3d7b3b"
+        }
+      },
+      "eligible": true
+    },
+    {
+      "candidate_id": "uav0000268_05773_v__t41",
+      "sequence": "uav0000268_05773_v",
+      "gt_target_id": 41,
+      "rank": 9,
+      "occlusion_start": 854,
+      "first_source_frame": 824,
+      "class": 3,
+      "category": 4,
+      "gt_box_wh": [
+        49.0,
+        33.0
+      ],
+      "min_side_px": 33.0,
+      "status": "screened",
+      "detectors": {
+        "yolo11": {
+          "status": "not_selected",
+          "selected_track_id": null,
+          "selected_frame_idx": null,
+          "selected_iou": null,
+          "selected_class": null,
+          "class_matches_gt": null,
+          "lock_ious": [],
+          "best_iou": 0.0,
+          "frames_with_match": 0,
+          "frames_with_gt": 30,
+          "tracks_sha256": "94aa162730f9d7de54ee648874037d3f9cd27faa1a5632ee468f65422329af72"
+        },
+        "yolo26": {
+          "status": "not_selected",
+          "selected_track_id": null,
+          "selected_frame_idx": null,
+          "selected_iou": null,
+          "selected_class": null,
+          "class_matches_gt": null,
+          "lock_ious": [],
+          "best_iou": 0.0,
+          "frames_with_match": 0,
+          "frames_with_gt": 30,
+          "tracks_sha256": "a1e0bc17c3c63527f4a510be7281cc5dc70ba65745e844ce373de69d13c40ea2"
+        }
+      },
+      "eligible": false
+    },
+    {
+      "candidate_id": "uav0000268_05773_v__t45",
+      "sequence": "uav0000268_05773_v",
+      "gt_target_id": 45,
+      "rank": 10,
+      "occlusion_start": 503,
+      "first_source_frame": 473,
+      "class": 3,
+      "category": 4,
+      "gt_box_wh": [
+        38.0,
+        29.0
+      ],
+      "min_side_px": 29.0,
+      "status": "screened",
+      "detectors": {
+        "yolo11": {
+          "status": "not_selected",
+          "selected_track_id": null,
+          "selected_frame_idx": null,
+          "selected_iou": null,
+          "selected_class": null,
+          "class_matches_gt": null,
+          "lock_ious": [],
+          "best_iou": 0.0,
+          "frames_with_match": 0,
+          "frames_with_gt": 30,
+          "tracks_sha256": "baea2d5f27b671d5801e160009f00c1dbc6a89da56afd197356ef78a3ba05e76"
+        },
+        "yolo26": {
+          "status": "not_selected",
+          "selected_track_id": null,
+          "selected_frame_idx": null,
+          "selected_iou": null,
+          "selected_class": null,
+          "class_matches_gt": null,
+          "lock_ious": [],
+          "best_iou": 0.0,
+          "frames_with_match": 0,
+          "frames_with_gt": 30,
+          "tracks_sha256": "f0d45d0c63fafd2f7484e3a870caff9446d21d6010f828b389eca75330ab3697"
+        }
+      },
+      "eligible": false
+    },
+    {
+      "candidate_id": "uav0000268_05773_v__t8",
+      "sequence": "uav0000268_05773_v",
+      "gt_target_id": 8,
+      "rank": 11,
+      "occlusion_start": 858,
+      "first_source_frame": 828,
+      "class": 3,
+      "category": 4,
+      "gt_box_wh": [
+        49.0,
+        31.0
+      ],
+      "min_side_px": 31.0,
+      "status": "screened",
+      "detectors": {
+        "yolo11": {
+          "status": "not_selected",
+          "selected_track_id": null,
+          "selected_frame_idx": null,
+          "selected_iou": null,
+          "selected_class": null,
+          "class_matches_gt": null,
+          "lock_ious": [],
+          "best_iou": 0.0,
+          "frames_with_match": 0,
+          "frames_with_gt": 30,
+          "tracks_sha256": "4c3709446335e7a0372bdc614ea0aba10617baec726a82247aaed95bfb4a6b34"
+        },
+        "yolo26": {
+          "status": "not_selected",
+          "selected_track_id": null,
+          "selected_frame_idx": null,
+          "selected_iou": null,
+          "selected_class": null,
+          "class_matches_gt": null,
+          "lock_ious": [],
+          "best_iou": 0.0,
+          "frames_with_match": 0,
+          "frames_with_gt": 30,
+          "tracks_sha256": "07d98831f8aba3d92e2f2ffb40b078922e74e9143bb1e99a6290ffca90e93313"
+        }
+      },
+      "eligible": false
+    },
+    {
+      "candidate_id": "uav0000305_00000_v__t25",
+      "sequence": "uav0000305_00000_v",
+      "gt_target_id": 25,
+      "rank": 0,
+      "occlusion_start": 36,
+      "first_source_frame": 6,
+      "class": 3,
+      "category": 4,
+      "gt_box_wh": [
+        108.0,
+        49.0
+      ],
+      "min_side_px": 49.0,
+      "status": "screened",
+      "detectors": {
+        "yolo11": {
+          "status": "locked",
+          "selected_track_id": 11,
+          "selected_frame_idx": 0,
+          "selected_iou": 0.7528926923282204,
+          "selected_class": 3,
+          "class_matches_gt": true,
+          "lock_ious": [
+            0.8020686672962442,
+            0.7893875059055746,
+            0.7999638116532037
+          ],
+          "best_iou": 0.8071806757223039,
+          "frames_with_match": 30,
+          "frames_with_gt": 30,
+          "tracks_sha256": "58d437f6fa2889b54fb62785356fd5875aba606938e06f59802b5d7f59f7d40b"
+        },
+        "yolo26": {
+          "status": "locked",
+          "selected_track_id": 18,
+          "selected_frame_idx": 0,
+          "selected_iou": 0.7884967386961584,
+          "selected_class": 3,
+          "class_matches_gt": true,
+          "lock_ious": [
+            0.811933412072192,
+            0.8293040486584816,
+            0.8379668853508248
+          ],
+          "best_iou": 0.8744703776870395,
+          "frames_with_match": 30,
+          "frames_with_gt": 30,
+          "tracks_sha256": "cf8536e51a5f41b5c2802fae63c6316adb590633d1cdd74f3afa0857d1b10813"
+        }
+      },
+      "eligible": true
+    },
+    {
+      "candidate_id": "uav0000305_00000_v__t30",
+      "sequence": "uav0000305_00000_v",
+      "gt_target_id": 30,
+      "rank": 1,
+      "occlusion_start": 32,
+      "first_source_frame": 2,
+      "class": 3,
+      "category": 4,
+      "gt_box_wh": [
+        110.0,
+        48.0
+      ],
+      "min_side_px": 48.0,
+      "status": "screened",
+      "detectors": {
+        "yolo11": {
+          "status": "locked",
+          "selected_track_id": 23,
+          "selected_frame_idx": 0,
+          "selected_iou": 0.7607335496474715,
+          "selected_class": 3,
+          "class_matches_gt": true,
+          "lock_ious": [
+            0.8183294591482406,
+            0.7884421500459952,
+            0.7655921324410222
+          ],
+          "best_iou": 0.8183294591482406,
+          "frames_with_match": 30,
+          "frames_with_gt": 30,
+          "tracks_sha256": "29fa0d2da780694d50d2aee118419832f3f46d76a7443bb93dfe56509666fae8"
+        },
+        "yolo26": {
+          "status": "locked",
+          "selected_track_id": 21,
+          "selected_frame_idx": 0,
+          "selected_iou": 0.8160318117223534,
+          "selected_class": 3,
+          "class_matches_gt": true,
+          "lock_ious": [
+            0.8351781033381912,
+            0.8232421171851456,
+            0.8150986914918052
+          ],
+          "best_iou": 0.8511122785759941,
+          "frames_with_match": 30,
+          "frames_with_gt": 30,
+          "tracks_sha256": "dd1d3a5ce05e3b89f621984f598946f5b8bb78ba711353894d6f1277035dd083"
+        }
+      },
+      "eligible": true
+    },
+    {
+      "candidate_id": "uav0000305_00000_v__t32",
+      "sequence": "uav0000305_00000_v",
+      "gt_target_id": 32,
+      "rank": 2,
+      "occlusion_start": 31,
+      "first_source_frame": 1,
+      "class": 3,
+      "category": 4,
+      "gt_box_wh": [
+        87.0,
+        99.0
+      ],
+      "min_side_px": 87.0,
+      "status": "screened",
+      "detectors": {
+        "yolo11": {
+          "status": "locked",
+          "selected_track_id": 7,
+          "selected_frame_idx": 0,
+          "selected_iou": 0.8844406288531091,
+          "selected_class": 3,
+          "class_matches_gt": true,
+          "lock_ious": [
+            0.8205211214384803,
+            0.8276940784983008,
+            0.8265540875350615
+          ],
+          "best_iou": 0.9217691203634523,
+          "frames_with_match": 30,
+          "frames_with_gt": 30,
+          "tracks_sha256": "b81e180785d7b4ea6c491d427657008e05d484e1fb84e701c75e3aec5c79f74c"
+        },
+        "yolo26": {
+          "status": "locked",
+          "selected_track_id": 10,
+          "selected_frame_idx": 0,
+          "selected_iou": 0.8505064562790924,
+          "selected_class": 3,
+          "class_matches_gt": true,
+          "lock_ious": [
+            0.8094867329927167,
+            0.8179407064831817,
+            0.8213694595552524
+          ],
+          "best_iou": 0.8611932100524199,
+          "frames_with_match": 30,
+          "frames_with_gt": 30,
+          "tracks_sha256": "78b4e92202dab9282923d3d2336d8dfd9f82ca7a3f05efcf4f3541d3b80a9bf4"
+        }
+      },
+      "eligible": true
+    },
+    {
+      "candidate_id": "uav0000305_00000_v__t69",
+      "sequence": "uav0000305_00000_v",
+      "gt_target_id": 69,
+      "rank": 3,
+      "occlusion_start": 42,
+      "first_source_frame": 12,
+      "class": 9,
+      "category": 10,
+      "gt_box_wh": [
+        42.0,
+        27.0
+      ],
+      "min_side_px": 27.0,
+      "status": "screened",
+      "detectors": {
+        "yolo11": {
+          "status": "locked",
+          "selected_track_id": 28,
+          "selected_frame_idx": 0,
+          "selected_iou": 0.6929432214281869,
+          "selected_class": 9,
+          "class_matches_gt": true,
+          "lock_ious": [
+            0.8487261907483408,
+            0.8361573418165851,
+            0.843724965733595
+          ],
+          "best_iou": 0.8780561377747099,
+          "frames_with_match": 30,
+          "frames_with_gt": 30,
+          "tracks_sha256": "96177d8993dd43fece26d41cd09a6d4f7ccf01a003295e08cd9b5a0a332cbdd1"
+        },
+        "yolo26": {
+          "status": "locked",
+          "selected_track_id": 36,
+          "selected_frame_idx": 0,
+          "selected_iou": 0.7388903466305992,
+          "selected_class": 2,
+          "class_matches_gt": false,
+          "lock_ious": [
+            0.8454376288148879,
+            0.8406346337289489,
+            0.8502718102809704
+          ],
+          "best_iou": 0.8502718102809704,
+          "frames_with_match": 30,
+          "frames_with_gt": 30,
+          "tracks_sha256": "0ddd941a1a9072b0c652a59187d210e5d9349802a8eaada14781b90194c488b1"
+        }
+      },
+      "eligible": true
+    },
+    {
+      "candidate_id": "uav0000305_00000_v__t2",
+      "sequence": "uav0000305_00000_v",
+      "gt_target_id": 2,
+      "rank": 4,
+      "occlusion_start": 39,
+      "first_source_frame": 9,
+      "class": 3,
+      "category": 4,
+      "gt_box_wh": [
+        103.0,
+        54.0
+      ],
+      "min_side_px": 54.0,
+      "status": "screened",
+      "detectors": {
+        "yolo11": {
+          "status": "locked",
+          "selected_track_id": 10,
+          "selected_frame_idx": 0,
+          "selected_iou": 0.7316566317877037,
+          "selected_class": 3,
+          "class_matches_gt": true,
+          "lock_ious": [
+            0.7880319322313984,
+            0.7761392837359878,
+            0.783603540430696
+          ],
+          "best_iou": 0.8220069217231847,
+          "frames_with_match": 30,
+          "frames_with_gt": 30,
+          "tracks_sha256": "fdd73db2f79bb146852b050d1733451135d7ecc957b24ed2a9384ba026ba299f"
+        },
+        "yolo26": {
+          "status": "locked",
+          "selected_track_id": 10,
+          "selected_frame_idx": 0,
+          "selected_iou": 0.7212125442946227,
+          "selected_class": 3,
+          "class_matches_gt": true,
+          "lock_ious": [
+            0.8190148098738441,
+            0.8041198972636722,
+            0.8047750820815753
+          ],
+          "best_iou": 0.8224886918271396,
+          "frames_with_match": 30,
+          "frames_with_gt": 30,
+          "tracks_sha256": "d107386d21539ef1931f53643888252bfd3fd7bc8ebd63938f23b39986079426"
+        }
+      },
+      "eligible": true
+    },
+    {
+      "candidate_id": "uav0000305_00000_v__t27",
+      "sequence": "uav0000305_00000_v",
+      "gt_target_id": 27,
+      "rank": 5,
+      "occlusion_start": 32,
+      "first_source_frame": 2,
+      "class": 6,
+      "category": 7,
+      "gt_box_wh": [
+        71.0,
+        33.0
+      ],
+      "min_side_px": 33.0,
+      "status": "screened",
+      "detectors": {
+        "yolo11": {
+          "status": "locked",
+          "selected_track_id": 34,
+          "selected_frame_idx": 0,
+          "selected_iou": 0.657691788479266,
+          "selected_class": 9,
+          "class_matches_gt": false,
+          "lock_ious": [
+            0.7001280618614485,
+            0.7503531187632834,
+            0.7462563282224647
+          ],
+          "best_iou": 0.7594046308331086,
+          "frames_with_match": 30,
+          "frames_with_gt": 30,
+          "tracks_sha256": "3cfc0fd42de5bef412e9e0d37ef36abb17a545b3a3541a2807cfddc371c12c3a"
+        },
+        "yolo26": {
+          "status": "not_selected",
+          "selected_track_id": null,
+          "selected_frame_idx": null,
+          "selected_iou": null,
+          "selected_class": null,
+          "class_matches_gt": null,
+          "lock_ious": [],
+          "best_iou": 0.0,
+          "frames_with_match": 0,
+          "frames_with_gt": 30,
+          "tracks_sha256": "1dec22192227d4446f72a5a2c657b2aea09e170747cce353cd9983ba0ed83fcd"
+        }
+      },
+      "eligible": false
+    },
+    {
+      "candidate_id": "uav0000305_00000_v__t26",
+      "sequence": "uav0000305_00000_v",
+      "gt_target_id": 26,
+      "rank": 6,
+      "occlusion_start": 33,
+      "first_source_frame": 3,
+      "class": 4,
+      "category": 5,
+      "gt_box_wh": [
+        94.0,
+        48.0
+      ],
+      "min_side_px": 48.0,
+      "status": "screened",
+      "detectors": {
+        "yolo11": {
+          "status": "locked",
+          "selected_track_id": 26,
+          "selected_frame_idx": 0,
+          "selected_iou": 0.8288627516486252,
+          "selected_class": 3,
+          "class_matches_gt": false,
+          "lock_ious": [
+            0.7871492013107351,
+            0.8040916268650954,
+            0.7864714654176064
+          ],
+          "best_iou": 0.8288627516486252,
+          "frames_with_match": 30,
+          "frames_with_gt": 30,
+          "tracks_sha256": "15d513932502d6c2db40e20243ab66f0f16077e59cab5e09d663d09bbcd0bead"
+        },
+        "yolo26": {
+          "status": "locked",
+          "selected_track_id": 25,
+          "selected_frame_idx": 0,
+          "selected_iou": 0.7967472391802125,
+          "selected_class": 3,
+          "class_matches_gt": false,
+          "lock_ious": [
+            0.7889628401569855,
+            0.8103633739906078,
+            0.7971188139792815
+          ],
+          "best_iou": 0.8828122648833827,
+          "frames_with_match": 30,
+          "frames_with_gt": 30,
+          "tracks_sha256": "65f53890f9b0440b57c59456c80b9326d3862ec0f76b1a470f0a4d14239f9f7d"
+        }
+      },
+      "eligible": true
+    },
+    {
+      "candidate_id": "uav0000305_00000_v__t24",
+      "sequence": "uav0000305_00000_v",
+      "gt_target_id": 24,
+      "rank": 7,
+      "occlusion_start": 36,
+      "first_source_frame": 6,
+      "class": 8,
+      "category": 9,
+      "gt_box_wh": [
+        133.0,
+        49.0
+      ],
+      "min_side_px": 49.0,
+      "status": "screened",
+      "detectors": {
+        "yolo11": {
+          "status": "locked",
+          "selected_track_id": 23,
+          "selected_frame_idx": 0,
+          "selected_iou": 0.9028289882131317,
+          "selected_class": 3,
+          "class_matches_gt": false,
+          "lock_ious": [
+            0.9330066912428061,
+            0.9128253549625049,
+            0.9002329970705009
+          ],
+          "best_iou": 0.9400387512076334,
+          "frames_with_match": 30,
+          "frames_with_gt": 30,
+          "tracks_sha256": "1b76d710119c5ddb5ad3c788c83ddf9c121d5f1ee1930f79fe5f3a0f44a292cc"
+        },
+        "yolo26": {
+          "status": "locked",
+          "selected_track_id": 24,
+          "selected_frame_idx": 0,
+          "selected_iou": 0.8686683860618525,
+          "selected_class": 3,
+          "class_matches_gt": false,
+          "lock_ious": [
+            0.936955352423736,
+            0.937121999875312,
+            0.9352182321514171
+          ],
+          "best_iou": 0.944407554835215,
+          "frames_with_match": 30,
+          "frames_with_gt": 30,
+          "tracks_sha256": "ec9b0a9c1876eba10d4b4414213f4fce032f7f48a74b200707a4dda722871767"
+        }
+      },
+      "eligible": true
+    },
+    {
+      "candidate_id": "uav0000305_00000_v__t55",
+      "sequence": "uav0000305_00000_v",
+      "gt_target_id": 55,
+      "rank": 8,
+      "occlusion_start": 34,
+      "first_source_frame": 4,
+      "class": 0,
+      "category": 1,
+      "gt_box_wh": [
+        25.0,
+        25.0
+      ],
+      "min_side_px": 25.0,
+      "status": "screened",
+      "detectors": {
+        "yolo11": {
+          "status": "not_selected",
+          "selected_track_id": null,
+          "selected_frame_idx": null,
+          "selected_iou": null,
+          "selected_class": null,
+          "class_matches_gt": null,
+          "lock_ious": [],
+          "best_iou": 0.0,
+          "frames_with_match": 0,
+          "frames_with_gt": 30,
+          "tracks_sha256": "c5942bb34de3c9952d1b2f66eae7c896ec0d13989e0e407124d081e3e20284d4"
+        },
+        "yolo26": {
+          "status": "not_selected",
+          "selected_track_id": null,
+          "selected_frame_idx": null,
+          "selected_iou": null,
+          "selected_class": null,
+          "class_matches_gt": null,
+          "lock_ious": [],
+          "best_iou": 0.0,
+          "frames_with_match": 0,
+          "frames_with_gt": 30,
+          "tracks_sha256": "55637732ab5091938aba4d50f195abc01f785e22d1d024e1f44ed56c34168c46"
+        }
+      },
+      "eligible": false
+    },
+    {
+      "candidate_id": "uav0000305_00000_v__t1",
+      "sequence": "uav0000305_00000_v",
+      "gt_target_id": 1,
+      "rank": 9,
+      "occlusion_start": 33,
+      "first_source_frame": 3,
+      "class": 3,
+      "category": 4,
+      "gt_box_wh": [
+        116.0,
+        58.0
+      ],
+      "min_side_px": 58.0,
+      "status": "screened",
+      "detectors": {
+        "yolo11": {
+          "status": "locked",
+          "selected_track_id": 17,
+          "selected_frame_idx": 0,
+          "selected_iou": 0.7382965143873765,
+          "selected_class": 3,
+          "class_matches_gt": true,
+          "lock_ious": [
+            0.7502140065302959,
+            0.7412393312084242,
+            0.744793783013978
+          ],
+          "best_iou": 0.7858773222634274,
+          "frames_with_match": 30,
+          "frames_with_gt": 30,
+          "tracks_sha256": "710a2132e0fd1da205162dddf4fb72e95d1dfd89e6e973e756f26e8b5be7f76f"
+        },
+        "yolo26": {
+          "status": "locked",
+          "selected_track_id": 22,
+          "selected_frame_idx": 0,
+          "selected_iou": 0.7493424400863042,
+          "selected_class": 3,
+          "class_matches_gt": true,
+          "lock_ious": [
+            0.7433229977001716,
+            0.7325306981649579,
+            0.7442603400085279
+          ],
+          "best_iou": 0.750851257378148,
+          "frames_with_match": 30,
+          "frames_with_gt": 30,
+          "tracks_sha256": "3aa0a6d344d519aa4bbffa590315d0014d6613898e0bf7e4daef9292703531c1"
+        }
+      },
+      "eligible": true
+    },
+    {
+      "candidate_id": "uav0000305_00000_v__t0",
+      "sequence": "uav0000305_00000_v",
+      "gt_target_id": 0,
+      "rank": 10,
+      "occlusion_start": 31,
+      "first_source_frame": 1,
+      "class": 3,
+      "category": 4,
+      "gt_box_wh": [
+        124.0,
+        52.0
+      ],
+      "min_side_px": 52.0,
+      "status": "screened",
+      "detectors": {
+        "yolo11": {
+          "status": "locked",
+          "selected_track_id": 12,
+          "selected_frame_idx": 0,
+          "selected_iou": 0.681776413713452,
+          "selected_class": 3,
+          "class_matches_gt": true,
+          "lock_ious": [
+            0.7010920922452076,
+            0.7104387093676766,
+            0.7207760889545062
+          ],
+          "best_iou": 0.7207760889545062,
+          "frames_with_match": 30,
+          "frames_with_gt": 30,
+          "tracks_sha256": "92d025b0505a9de2a1ded01ca18986352032b41a1ebb178af151f7b2ba04e816"
+        },
+        "yolo26": {
+          "status": "locked",
+          "selected_track_id": 13,
+          "selected_frame_idx": 0,
+          "selected_iou": 0.7416033058596053,
+          "selected_class": 3,
+          "class_matches_gt": true,
+          "lock_ious": [
+            0.6716712376710755,
+            0.681442502374507,
+            0.6890630048623199
+          ],
+          "best_iou": 0.7416033058596053,
+          "frames_with_match": 30,
+          "frames_with_gt": 30,
+          "tracks_sha256": "eb594561c51c4bf42e8bde34baf42e0addab8804061e120090e88167d97f1778"
+        }
+      },
+      "eligible": true
+    },
+    {
+      "candidate_id": "uav0000339_00001_v__t52",
+      "sequence": "uav0000339_00001_v",
+      "gt_target_id": 52,
+      "rank": 0,
+      "occlusion_start": 86,
+      "first_source_frame": 56,
+      "class": 9,
+      "category": 10,
+      "gt_box_wh": [
+        43.0,
+        39.0
+      ],
+      "min_side_px": 39.0,
+      "status": "screened",
+      "detectors": {
+        "yolo11": {
+          "status": "locked",
+          "selected_track_id": 13,
+          "selected_frame_idx": 0,
+          "selected_iou": 0.6209090259648109,
+          "selected_class": 9,
+          "class_matches_gt": true,
+          "lock_ious": [
+            0.6458364414983053,
+            0.6298387063001868,
+            0.6651343077667764
+          ],
+          "best_iou": 0.7283516642751398,
+          "frames_with_match": 30,
+          "frames_with_gt": 30,
+          "tracks_sha256": "15c6fd1825981ee2a3aeaa10b9d83f1235bbe4d4731465f46a85a2ed541d2a52"
+        },
+        "yolo26": {
+          "status": "locked",
+          "selected_track_id": 27,
+          "selected_frame_idx": 0,
+          "selected_iou": 0.5781604204777813,
+          "selected_class": 9,
+          "class_matches_gt": true,
+          "lock_ious": [
+            0.5667717656643798,
+            0.5988316794587483,
+            0.6465013137683672
+          ],
+          "best_iou": 0.7376768183269686,
+          "frames_with_match": 30,
+          "frames_with_gt": 30,
+          "tracks_sha256": "80defb42cad0a518cd0d2b380dd6366bb45bebe0ee1287dde1419e0e37aad020"
+        }
+      },
+      "eligible": true
+    },
+    {
+      "candidate_id": "uav0000339_00001_v__t65",
+      "sequence": "uav0000339_00001_v",
+      "gt_target_id": 65,
+      "rank": 1,
+      "occlusion_start": 37,
+      "first_source_frame": 7,
+      "class": 7,
+      "category": 8,
+      "gt_box_wh": [
+        59.0,
+        54.0
+      ],
+      "min_side_px": 54.0,
+      "status": "screened",
+      "detectors": {
+        "yolo11": {
+          "status": "not_selected",
+          "selected_track_id": null,
+          "selected_frame_idx": null,
+          "selected_iou": null,
+          "selected_class": null,
+          "class_matches_gt": null,
+          "lock_ious": [],
+          "best_iou": 0.03826056070941534,
+          "frames_with_match": 0,
+          "frames_with_gt": 30,
+          "tracks_sha256": "37fe59c78240b964a1d911d8172d9b815f93ba62b79deffffed20b36b00adf11"
+        },
+        "yolo26": {
+          "status": "lost_before_occlusion",
+          "selected_track_id": 21,
+          "selected_frame_idx": 6,
+          "selected_iou": 0.6013047843276302,
+          "selected_class": 3,
+          "class_matches_gt": false,
+          "lock_ious": [
+            null,
+            null,
+            null
+          ],
+          "best_iou": 0.7507577598205196,
+          "frames_with_match": 8,
+          "frames_with_gt": 30,
+          "tracks_sha256": "c2242a6c0fd791e25fd02722b28a2c8bd7f7db6f4cb05e9c739a7d2595241767"
+        }
+      },
+      "eligible": false
+    },
+    {
+      "candidate_id": "uav0000339_00001_v__t24",
+      "sequence": "uav0000339_00001_v",
+      "gt_target_id": 24,
+      "rank": 2,
+      "occlusion_start": 63,
+      "first_source_frame": 33,
+      "class": 1,
+      "category": 2,
+      "gt_box_wh": [
+        45.0,
+        82.0
+      ],
+      "min_side_px": 45.0,
+      "status": "screened",
+      "detectors": {
+        "yolo11": {
+          "status": "lost_before_occlusion",
+          "selected_track_id": 20,
+          "selected_frame_idx": 0,
+          "selected_iou": 0.8147565972757302,
+          "selected_class": 1,
+          "class_matches_gt": true,
+          "lock_ious": [
+            null,
+            null,
+            null
+          ],
+          "best_iou": 0.9491900125108729,
+          "frames_with_match": 30,
+          "frames_with_gt": 30,
+          "tracks_sha256": "8a736924829b540c509d3e70245529e7e42df5313608695d0f29656c8617e158"
+        },
+        "yolo26": {
+          "status": "lost_before_occlusion",
+          "selected_track_id": 33,
+          "selected_frame_idx": 0,
+          "selected_iou": 0.9656899163677425,
+          "selected_class": 0,
+          "class_matches_gt": false,
+          "lock_ious": [
+            null,
+            null,
+            null
+          ],
+          "best_iou": 0.9656899163677425,
+          "frames_with_match": 29,
+          "frames_with_gt": 30,
+          "tracks_sha256": "88c32ec34c8a8f1e4f8beb2de8a212168b56757933472532baf7538178634ce1"
+        }
+      },
+      "eligible": false
+    },
+    {
+      "candidate_id": "uav0000339_00001_v__t13",
+      "sequence": "uav0000339_00001_v",
+      "gt_target_id": 13,
+      "rank": 3,
+      "occlusion_start": 75,
+      "first_source_frame": 45,
+      "class": 3,
+      "category": 4,
+      "gt_box_wh": [
+        67.0,
+        59.0
+      ],
+      "min_side_px": 59.0,
+      "status": "screened",
+      "detectors": {
+        "yolo11": {
+          "status": "locked",
+          "selected_track_id": 1,
+          "selected_frame_idx": 0,
+          "selected_iou": 0.9504215151884131,
+          "selected_class": 3,
+          "class_matches_gt": true,
+          "lock_ious": [
+            0.8666787031774992,
+            0.8735322678064714,
+            0.8882221410533023
+          ],
+          "best_iou": 0.9504215151884131,
+          "frames_with_match": 30,
+          "frames_with_gt": 30,
+          "tracks_sha256": "3e69678f945ad5cde510ec9e8b4a802dfef662842ea86246ede7beb70a5c7828"
+        },
+        "yolo26": {
+          "status": "locked",
+          "selected_track_id": 4,
+          "selected_frame_idx": 0,
+          "selected_iou": 0.9363004224105451,
+          "selected_class": 3,
+          "class_matches_gt": true,
+          "lock_ious": [
+            0.9037932043854194,
+            0.9031365388346946,
+            0.8908903251928664
+          ],
+          "best_iou": 0.9613849614704809,
+          "frames_with_match": 30,
+          "frames_with_gt": 30,
+          "tracks_sha256": "297d7cbd1d0c843ccd6088184404a801a4a48fdfa64ebe3a0bd5c241239a862a"
+        }
+      },
+      "eligible": true
+    },
+    {
+      "candidate_id": "uav0000339_00001_v__t6",
+      "sequence": "uav0000339_00001_v",
+      "gt_target_id": 6,
+      "rank": 4,
+      "occlusion_start": 45,
+      "first_source_frame": 15,
+      "class": 3,
+      "category": 4,
+      "gt_box_wh": [
+        67.0,
+        63.0
+      ],
+      "min_side_px": 63.0,
+      "status": "screened",
+      "detectors": {
+        "yolo11": {
+          "status": "locked",
+          "selected_track_id": 5,
+          "selected_frame_idx": 0,
+          "selected_iou": 0.8651560303496032,
+          "selected_class": 3,
+          "class_matches_gt": true,
+          "lock_ious": [
+            0.9080947217454438,
+            0.9230842384954099,
+            0.9101752877761419
+          ],
+          "best_iou": 0.9244622996632529,
+          "frames_with_match": 30,
+          "frames_with_gt": 30,
+          "tracks_sha256": "7bdef12f3b8f23d5ebfce0bc37af476954b85302e2b5fb9828a32534beee4c21"
+        },
+        "yolo26": {
+          "status": "locked",
+          "selected_track_id": 4,
+          "selected_frame_idx": 0,
+          "selected_iou": 0.9020888578990116,
+          "selected_class": 3,
+          "class_matches_gt": true,
+          "lock_ious": [
+            0.9329961360016455,
+            0.9308709973280435,
+            0.9099220090956133
+          ],
+          "best_iou": 0.9362580416716019,
+          "frames_with_match": 30,
+          "frames_with_gt": 30,
+          "tracks_sha256": "636d26962beb4e605571eeb78cc751ba606b4a5ef65d3d7e3ecd25cab42ae4e0"
+        }
+      },
+      "eligible": true
+    },
+    {
+      "candidate_id": "uav0000339_00001_v__t41",
+      "sequence": "uav0000339_00001_v",
+      "gt_target_id": 41,
+      "rank": 5,
+      "occlusion_start": 120,
+      "first_source_frame": 90,
+      "class": 0,
+      "category": 1,
+      "gt_box_wh": [
+        29.0,
+        62.0
+      ],
+      "min_side_px": 29.0,
+      "status": "screened",
+      "detectors": {
+        "yolo11": {
+          "status": "lost_before_occlusion",
+          "selected_track_id": 21,
+          "selected_frame_idx": 0,
+          "selected_iou": 0.6850671076500088,
+          "selected_class": 0,
+          "class_matches_gt": true,
+          "lock_ious": [
+            null,
+            null,
+            null
+          ],
+          "best_iou": 0.8643779458475906,
+          "frames_with_match": 25,
+          "frames_with_gt": 30,
+          "tracks_sha256": "dee940e6b2bc2ea259a4c4c67f1e648b43c8c5db9ee1cbabf1c834faa6389c9e"
+        },
+        "yolo26": {
+          "status": "locked",
+          "selected_track_id": 20,
+          "selected_frame_idx": 0,
+          "selected_iou": 0.603917338363972,
+          "selected_class": 0,
+          "class_matches_gt": true,
+          "lock_ious": [
+            0.7293280794195109,
+            0.684290582372147,
+            0.6606012067930551
+          ],
+          "best_iou": 0.8579317193293946,
+          "frames_with_match": 29,
+          "frames_with_gt": 30,
+          "tracks_sha256": "0fd7cca83cb88e6747ab8e42fbe5d730da68cd61ada847ce7d049212ab60e56a"
+        }
+      },
+      "eligible": false
+    },
+    {
+      "candidate_id": "uav0000339_00001_v__t40",
+      "sequence": "uav0000339_00001_v",
+      "gt_target_id": 40,
+      "rank": 6,
+      "occlusion_start": 137,
+      "first_source_frame": 107,
+      "class": 0,
+      "category": 1,
+      "gt_box_wh": [
+        29.0,
+        46.0
+      ],
+      "min_side_px": 29.0,
+      "status": "screened",
+      "detectors": {
+        "yolo11": {
+          "status": "locked",
+          "selected_track_id": 19,
+          "selected_frame_idx": 1,
+          "selected_iou": 0.5839111948191794,
+          "selected_class": 0,
+          "class_matches_gt": true,
+          "lock_ious": [
+            0.6265131858096156,
+            0.5861504286895137,
+            0.7043050512194363
+          ],
+          "best_iou": 0.7631678599565586,
+          "frames_with_match": 26,
+          "frames_with_gt": 30,
+          "tracks_sha256": "3cda999c11521224abe8e6859df4ffaf25c100e21562517a3f9e889bbfaa59df"
+        },
+        "yolo26": {
+          "status": "lost_before_occlusion",
+          "selected_track_id": 34,
+          "selected_frame_idx": 0,
+          "selected_iou": 0.5805928198034765,
+          "selected_class": 0,
+          "class_matches_gt": true,
+          "lock_ious": [
+            null,
+            null,
+            null
+          ],
+          "best_iou": 0.8598780799989438,
+          "frames_with_match": 27,
+          "frames_with_gt": 30,
+          "tracks_sha256": "ca953083f7df0be12fc980b9f4815ec882fd587ae365f2fc03548fc1d0e478c6"
+        }
+      },
+      "eligible": false
+    },
+    {
+      "candidate_id": "uav0000339_00001_v__t46",
+      "sequence": "uav0000339_00001_v",
+      "gt_target_id": 46,
+      "rank": 7,
+      "occlusion_start": 40,
+      "first_source_frame": 10,
+      "class": 3,
+      "category": 4,
+      "gt_box_wh": [
+        110.0,
+        47.0
+      ],
+      "min_side_px": 47.0,
+      "status": "screened",
+      "detectors": {
+        "yolo11": {
+          "status": "not_selected",
+          "selected_track_id": null,
+          "selected_frame_idx": null,
+          "selected_iou": null,
+          "selected_class": null,
+          "class_matches_gt": null,
+          "lock_ious": [],
+          "best_iou": 0.0,
+          "frames_with_match": 0,
+          "frames_with_gt": 30,
+          "tracks_sha256": "50ebc6e2b462290f7f55c314f731f0614611cf630553c62dd54e86fe69e9c538"
+        },
+        "yolo26": {
+          "status": "locked",
+          "selected_track_id": 23,
+          "selected_frame_idx": 0,
+          "selected_iou": 0.7360529762406247,
+          "selected_class": 3,
+          "class_matches_gt": true,
+          "lock_ious": [
+            0.8564801718403144,
+            0.8223717542901708,
+            0.8019211526847728
+          ],
+          "best_iou": 0.8564801718403144,
+          "frames_with_match": 21,
+          "frames_with_gt": 30,
+          "tracks_sha256": "580abf7a3ce9cb3f988c8359ebf649d888a0bd16d0be6c3bf309e7e0bff0b331"
+        }
+      },
+      "eligible": false
+    },
+    {
+      "candidate_id": "uav0000339_00001_v__t21",
+      "sequence": "uav0000339_00001_v",
+      "gt_target_id": 21,
+      "rank": 8,
+      "occlusion_start": 63,
+      "first_source_frame": 33,
+      "class": 0,
+      "category": 1,
+      "gt_box_wh": [
+        19.0,
+        59.0
+      ],
+      "min_side_px": 19.0,
+      "status": "screened",
+      "detectors": {
+        "yolo11": {
+          "status": "not_selected",
+          "selected_track_id": null,
+          "selected_frame_idx": null,
+          "selected_iou": null,
+          "selected_class": null,
+          "class_matches_gt": null,
+          "lock_ious": [],
+          "best_iou": 0.5054787676200752,
+          "frames_with_match": 1,
+          "frames_with_gt": 30,
+          "tracks_sha256": "b7b084bcdf900a7a4e695dabdf3003f5ffffd99bf5edf90ed88253a5de82cf14"
+        },
+        "yolo26": {
+          "status": "lost_before_occlusion",
+          "selected_track_id": 13,
+          "selected_frame_idx": 3,
+          "selected_iou": 0.5251269869903935,
+          "selected_class": 0,
+          "class_matches_gt": true,
+          "lock_ious": [
+            0.39590106358906135,
+            0.3802077232689623,
+            0.34742967330597896
+          ],
+          "best_iou": 0.6829831661800764,
+          "frames_with_match": 3,
+          "frames_with_gt": 30,
+          "tracks_sha256": "3e349bbe55c4c21539298de7c633496cb682a00d1e6ff88745050fb2d2544bb1"
+        }
+      },
+      "eligible": false
+    },
+    {
+      "candidate_id": "uav0000339_00001_v__t4",
+      "sequence": "uav0000339_00001_v",
+      "gt_target_id": 4,
+      "rank": 9,
+      "occlusion_start": 90,
+      "first_source_frame": 60,
+      "class": 6,
+      "category": 7,
+      "gt_box_wh": [
+        48.0,
+        86.0
+      ],
+      "min_side_px": 48.0,
+      "status": "screened",
+      "detectors": {
+        "yolo11": {
+          "status": "locked",
+          "selected_track_id": 14,
+          "selected_frame_idx": 0,
+          "selected_iou": 0.8653150618482832,
+          "selected_class": 6,
+          "class_matches_gt": true,
+          "lock_ious": [
+            0.8960918629226313,
+            0.9046410612341068,
+            0.9160453229167953
+          ],
+          "best_iou": 0.9287523537679088,
+          "frames_with_match": 30,
+          "frames_with_gt": 30,
+          "tracks_sha256": "2f338b35688e6bd4eac80d915999971cb35522a0b4b6100fb14c48813d1c5288"
+        },
+        "yolo26": {
+          "status": "locked",
+          "selected_track_id": 4,
+          "selected_frame_idx": 0,
+          "selected_iou": 0.8458232142304347,
+          "selected_class": 6,
+          "class_matches_gt": true,
+          "lock_ious": [
+            0.9153492395859608,
+            0.9192048829578202,
+            0.8952126179223291
+          ],
+          "best_iou": 0.9225782058239552,
+          "frames_with_match": 30,
+          "frames_with_gt": 30,
+          "tracks_sha256": "86fe5bbdbdab84a48ba7c640f1d2ae830ae476eb14a14abd54acd4894304e8db"
+        }
+      },
+      "eligible": true
+    },
+    {
+      "candidate_id": "uav0000339_00001_v__t22",
+      "sequence": "uav0000339_00001_v",
+      "gt_target_id": 22,
+      "rank": 10,
+      "occlusion_start": 110,
+      "first_source_frame": 80,
+      "class": 0,
+      "category": 1,
+      "gt_box_wh": [
+        27.0,
+        74.0
+      ],
+      "min_side_px": 27.0,
+      "status": "screened",
+      "detectors": {
+        "yolo11": {
+          "status": "locked",
+          "selected_track_id": 19,
+          "selected_frame_idx": 0,
+          "selected_iou": 0.8558319888212241,
+          "selected_class": 0,
+          "class_matches_gt": true,
+          "lock_ious": [
+            0.8920537703740432,
+            0.8887443881292263,
+            0.928473693874043
+          ],
+          "best_iou": 0.928473693874043,
+          "frames_with_match": 30,
+          "frames_with_gt": 30,
+          "tracks_sha256": "b4ba9ad40ca0d5ab409aed22cfba7048a871265a96af5e896db32bd08a84a9fd"
+        },
+        "yolo26": {
+          "status": "locked",
+          "selected_track_id": 26,
+          "selected_frame_idx": 0,
+          "selected_iou": 0.8580496187388934,
+          "selected_class": 0,
+          "class_matches_gt": true,
+          "lock_ious": [
+            0.9102350169828797,
+            0.936580126538109,
+            0.9435567370787336
+          ],
+          "best_iou": 0.9435567370787336,
+          "frames_with_match": 30,
+          "frames_with_gt": 30,
+          "tracks_sha256": "7132549c3d860165f337e109c461cb5a898ddce3b361d38ebe16bb56713cec1f"
+        }
+      },
+      "eligible": true
+    },
+    {
+      "candidate_id": "uav0000339_00001_v__t5",
+      "sequence": "uav0000339_00001_v",
+      "gt_target_id": 5,
+      "rank": 11,
+      "occlusion_start": 69,
+      "first_source_frame": 39,
+      "class": 3,
+      "category": 4,
+      "gt_box_wh": [
+        104.0,
+        90.0
+      ],
+      "min_side_px": 90.0,
+      "status": "screened",
+      "detectors": {
+        "yolo11": {
+          "status": "locked",
+          "selected_track_id": 2,
+          "selected_frame_idx": 0,
+          "selected_iou": 0.9165493912006644,
+          "selected_class": 3,
+          "class_matches_gt": true,
+          "lock_ious": [
+            0.9041685553655214,
+            0.9119678436498759,
+            0.9178005227678823
+          ],
+          "best_iou": 0.9562280008158283,
+          "frames_with_match": 30,
+          "frames_with_gt": 30,
+          "tracks_sha256": "1a6ed0330293c2f85e74bcb8311e7980c7e5f4a48136132cf03cee38edb64804"
+        },
+        "yolo26": {
+          "status": "locked",
+          "selected_track_id": 3,
+          "selected_frame_idx": 0,
+          "selected_iou": 0.9114421784723259,
+          "selected_class": 3,
+          "class_matches_gt": true,
+          "lock_ious": [
+            0.9490620185745463,
+            0.9466025027263069,
+            0.9344164069565102
+          ],
+          "best_iou": 0.9494396030246548,
+          "frames_with_match": 30,
+          "frames_with_gt": 30,
+          "tracks_sha256": "2a270149f596d0e2d4d3171dee21c0ffbda54a6bc0a578d2cd5673e4ea4f8130"
+        }
+      },
+      "eligible": true
+    }
+  ],
+  "git": {
+    "commit": "5692e000b74486ebd61de08e7ce1486c558e076f",
+    "branch": "feat/occlusion-target-screening",
+    "dirty": true
+  },
+  "versions": {
+    "ultralytics": "8.4.174",
+    "torch": "2.14.1+cu130",
+    "opencv": "4.10.0"
+  },
+  "created_at": "2026-11-14T13:16:57+00:00"
+}
