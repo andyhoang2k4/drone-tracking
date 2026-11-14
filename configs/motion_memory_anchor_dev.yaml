@@ -1,0 +1,101 @@
+# Danh gia anchor (ghi nho ID goc) cua Motion Memory tren DEV - DANG KY TRUOC khi
+# co ket qua (CLAUDE.md muc 13). Viet 2026-11-15, TRUOC khi chay bat ky replay nao
+# voi anchor_recovery. KHONG sua sau khi da chay; doi quy tac -> tang `version` +
+# tag moi (version cu giu lai).
+#
+# Thuc thi: src/mm_variant_eval.py (ham thuan, co test) +
+#   python scripts/tune_motion_memory.py --variant configs/motion_memory_anchor_dev.yaml
+# sha256 cua file nay (bo ky tu CR) ghi vao config.yaml/summary.json va config.yaml
+# cua moi experiment bien the.
+#
+# --- Pham vi ---
+#   Chi nhom dev, kich ban v2, metrics v2 (chi kich ban da khoa truoc khi che).
+#   Replay log tracker cua ablation v2_001 (khong chay lai YOLO). Heldout KHONG
+#   duoc dung o bat ky buoc nao. Chay DUNG MOT LAN; giu ket qua du xau; khong
+#   tune tham so nao.
+#
+# --- Bien the (ten co dinh) ---
+#   default_regression: MM mac dinh chay lai tren code moi, co anchor TAT. Bang
+#     chung hoi quy: PHAI trung tune_default ve MOI chi so trong `overall` va
+#     `by_duration_frames` cua tung detector; lech -> DUNG, bao loi, KHONG dien
+#     giai ket qua anchor.
+#   anchor: configs/motion_memory.yaml (lost=15) + anchor_recovery: true.
+#     BIEN THE QUYET DINH.
+#   anchor_lost25: = configs/motion_memory_tuned.yaml (lost=25) + anchor_recovery:
+#     true. CHI MO TA, khong dung de quyet dinh. Tham so viet tuong minh duoi
+#     dang overrides; script kiem tra file tuned (da resolve) + check_extra trung
+#     dung cac tham so nay (va ghi sha256 file tuned) - lech -> tu choi.
+#
+# --- Quy tac quyet dinh (bien the `anchor`, TUNG detector rieng) ---
+#   Dat <=> CA HAI detector dat CA BA dieu kien (so bang Fraction tren count):
+#   (i)   reid(d) = reidentified / scenarios_evaluated cua by_duration_frames[d]:
+#         reid_anchor(d) >= reid_no_mm(d) voi d = 15 va 30;
+#   (ii)  cpr gop (overall: correct_occluded_frames / occlusion_frames):
+#         cpr_anchor >= cpr_mm_default - 0.01;
+#   (iii) reid_anchor(5) >= reid_mm_default(5).
+#   no_mm = <det>_botsort_occl_dev_v2_001; mm_default = <det>_botsort_mm_occl_dev_tune_default.
+#
+# --- Sau ket qua (cam ket truoc) ---
+#   (2) dat: cau hinh `anchor` vao heldout nhu MOT COT DUOC KHAI BAO cung cac cot
+#     MM v1 (no-MM, MM mac dinh, MM tuned); ke hoach heldout (co hash) phai duoc
+#     viet + commit TRUOC khi chay screening heldout.
+#   (2) khong dat: ghi nhan ket qua am; heldout van chay voi cac cot MM v1; moi
+#     vong sua MM tiep theo la vong dev MOI co khai bao truoc, toi da MOT vong nua.
+#   Cot anchor_lost25 va moi chi so mo ta KHONG dung de chon cau hinh sau khi thay
+#   ket qua; chi vao heldout neu ke hoach heldout khai bao truoc khi chay.
+#
+# --- Mo ta (khong quyet dinh) ---
+#   box_precision = correct_occluded_frames / occluded_frames_with_output (cong
+#   count), reid moi duration, reidentified_with_new_track_id, so kich ban co
+#   recover_reason anchor_id / motion_gate, chan doan hijack
+#   (scripts/diagnose_mm_hijack.py).
+
+version: 1
+name: motion_memory_anchor_dev
+group: dev
+detectors: [yolo11, yolo26]
+
+metrics_config: configs/occlusion_metrics_v2.yaml
+metrics_config_version: 2
+base_motion_memory_config: configs/motion_memory.yaml
+source_tag: v2_001          # log tracker + baseline no-MM
+tag: anchor_v1              # experiments/<det>_botsort_mm_occl_dev_anchor_v1_<bien the>
+
+expected_defaults:          # = configs/motion_memory.yaml (da resolve) luc dang ky
+  lost_timeout_frames: 15
+  reid_timeout_frames: 45
+  velocity_decay: 0.95
+  match_iou: 0.3
+  anchor_recovery: false
+
+variants:                   # thu tu co dinh
+  - id: default_regression
+    role: regression
+    overrides: {}
+  - id: anchor
+    role: decision
+    overrides: {anchor_recovery: true}
+  - id: anchor_lost25
+    role: descriptive
+    overrides: {lost_timeout_frames: 25, anchor_recovery: true}
+    check_file: configs/motion_memory_tuned.yaml
+    check_extra: {anchor_recovery: true}
+
+references:                 # experiment co san ({det} = ten detector)
+  no_mm: "{det}_botsort_occl_dev_v2_001"
+  mm_default: "{det}_botsort_mm_occl_dev_tune_default"
+  mm_tuned: "{det}_botsort_mm_occl_dev_tune_r1_lost_timeout_frames_25"   # chi mo ta
+
+regression:
+  variant: default_regression
+  reference: mm_default
+  sections: [overall, by_duration_frames]
+
+decision:
+  variant: anchor
+  reid_not_below:
+    - {reference: no_mm, durations: [15, 30]}
+    - {reference: mm_default, durations: [5]}
+  cpr_max_drop:
+    reference: mm_default
+    value: 0.01
