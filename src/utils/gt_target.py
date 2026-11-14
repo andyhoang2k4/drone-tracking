@@ -24,7 +24,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Mapping, Optional, Union
+from typing import Any, Mapping, Optional, Sequence, Union
 
 from src.motion_memory import BBox
 from src.utils.visdrone import is_ignore_region, read_annotation_file
@@ -141,3 +141,145 @@ class GtTargetSelector:
             "max_search_frames": self.max_search_frames,
             "frames_searched": self.frames_searched,
         }
+
+
+# ---------------- "khoa duoc truoc khi che" (screening + danh gia v2) ----------------
+#
+# Dinh nghia DUNG CHUNG cho buoc screening muc tieu (src/occlusion_screening.py)
+# va danh gia kich ban occlusion v2 (src/evaluate.py), de hai noi khong lech:
+#
+#   khoa duoc  <=>  (1) GtTargetSelector (match_iou, max_search_frames) chon
+#                       duoc track tren cac frame TRUOC khi che;
+#                   (2) track da chon co mat va IoU(bbox track, GT) >= lock_iou
+#                       o MOI frame trong lock_confirm_frames frame lien truoc
+#                       khi che [a - L, a - 1].
+# Khong xet class (nguoi van hanh chon vat the, khong quan tam nhan); class cua
+# track da chon chi duoc GHI LAI.
+
+LOCK_LOCKED = "locked"
+LOCK_NOT_SELECTED = "not_selected"
+LOCK_LOST = "lost_before_occlusion"
+
+
+@dataclass(frozen=True)
+class LockRule:
+    match_iou: float
+    max_search_frames: int
+    lock_confirm_frames: int
+    lock_iou: float
+
+    def __post_init__(self) -> None:
+        if not 0.0 < self.match_iou <= 1.0 or not 0.0 < self.lock_iou <= 1.0:
+            raise ValueError("match_iou/lock_iou phai trong (0, 1]")
+        if self.max_search_frames < 1 or self.lock_confirm_frames < 1:
+            raise ValueError("max_search_frames/lock_confirm_frames phai >= 1")
+
+    @classmethod
+    def from_mapping(cls, data: Mapping[str, Any]) -> "LockRule":
+        try:
+            return cls(
+                match_iou=float(data["match_iou"]),
+                max_search_frames=int(data["max_search_frames"]),
+                lock_confirm_frames=int(data["lock_confirm_frames"]),
+                lock_iou=float(data["lock_iou"]),
+            )
+        except KeyError as exc:
+            raise ValueError(f"target_lock thieu khoa {exc}") from exc
+
+    def as_dict(self) -> dict[str, Any]:
+        return {
+            "match_iou": self.match_iou,
+            "max_search_frames": self.max_search_frames,
+            "lock_confirm_frames": self.lock_confirm_frames,
+            "lock_iou": self.lock_iou,
+        }
+
+
+def _track_box(track: Mapping[str, Any]) -> BBox:
+    return BBox(*[float(v) for v in track["bbox"]])
+
+
+def evaluate_target_lock(
+    records: Sequence[Mapping[str, Any]],
+    gt_boxes: Mapping[int, BBox],
+    rule: LockRule,
+    occlusion_start_frame_idx: int,
+    *,
+    first_frame: int = 1,
+    gt_target_id: Optional[int] = None,
+) -> dict[str, Any]:
+    """Xet muc tieu co "khoa duoc truoc khi che" tren log track (src.track).
+
+    Args:
+        records: ban ghi track theo frame_idx 0.. (chi dung frame < a).
+        gt_boxes: {frame VisDrone: bbox GT muc tieu} (frame = frame_idx + first_frame).
+        occlusion_start_frame_idx: a = frame_idx dau tien bi che.
+
+    Tra ve dict: status (locked | not_selected | lost_before_occlusion), locked,
+    selection (GtTargetSelector.as_dict()), selected_class, lock_ious (IoU track
+    da chon o [a-L, a-1], None = track khong co mat), best_iou (IoU lon nhat cua
+    bat ky track co ID voi GT tren frame truoc che), frames_with_match (so frame
+    truoc che co track IoU >= match_iou), frames_with_gt.
+    """
+    a = int(occlusion_start_frame_idx)
+    if a < 1:
+        raise ValueError("occlusion_start_frame_idx phai >= 1")
+    by_idx = {int(r["frame_idx"]): r for r in records}
+    pre = [by_idx[k] for k in range(a) if k in by_idx]
+    if len(pre) != a:
+        raise ValueError(f"log track thieu frame truoc khi che (co {len(pre)}/{a})")
+
+    selector = GtTargetSelector(
+        gt_boxes=gt_boxes,
+        match_iou=rule.match_iou,
+        max_search_frames=rule.max_search_frames,
+        first_frame=first_frame,
+        gt_target_id=gt_target_id,
+    )
+    best_iou = 0.0
+    frames_with_match = 0
+    frames_with_gt = 0
+    selected_class: Optional[int] = None
+    for record in pre:
+        selector.offer(record)
+        gt = gt_boxes.get(int(record["frame_idx"]) + first_frame)
+        if gt is None:
+            continue
+        frames_with_gt += 1
+        ious = [_iou(gt, _track_box(t)) for t in record["tracks"] if t.get("track_id") is not None]
+        top = max(ious, default=0.0)
+        best_iou = max(best_iou, top)
+        frames_with_match += int(top >= rule.match_iou)
+    selector.finish()
+    selection = selector.as_dict()
+
+    lock_ious: list[Optional[float]] = []
+    status = LOCK_NOT_SELECTED
+    if selector.status == STATUS_SELECTED:
+        sid = selector.selected_track_id
+        for t in by_idx[selector.selected_frame_idx]["tracks"]:
+            if t.get("track_id") == sid:
+                cls = t.get("cls")
+                selected_class = int(cls) if cls is not None else None
+                break
+        for k in range(a - rule.lock_confirm_frames, a):
+            gt = gt_boxes.get(k + first_frame) if k >= 0 else None
+            track = (
+                next((t for t in by_idx[k]["tracks"] if t.get("track_id") == sid), None)
+                if k >= 0 else None
+            )
+            lock_ious.append(_iou(gt, _track_box(track)) if gt is not None and track is not None else None)
+        ok = all(v is not None and v >= rule.lock_iou for v in lock_ious)
+        status = LOCK_LOCKED if ok else LOCK_LOST
+    return {
+        "status": status,
+        "locked": status == LOCK_LOCKED,
+        "rule": rule.as_dict(),
+        "occlusion_start_frame_idx": a,
+        "selection": selection,
+        "selected_class": selected_class,
+        "lock_ious": lock_ious,
+        "best_iou": best_iou,
+        "frames_with_match": frames_with_match,
+        "frames_with_gt": frames_with_gt,
+    }
