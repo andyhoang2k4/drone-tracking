@@ -1,0 +1,57 @@
+# Sinh boi scripts/run_occlusion_ablation.py - khong sua sau khi da co ket qua.
+experiment_id: yolo26_botsort_mm_anchor_lost25_occl_heldout_v2_001
+purpose: Ablation Motion Memory tren kich ban occlusion nhan tao (CLAUDE.md muc 12)
+detector:
+  name: yolo26
+  weights: weights/eval/yolo26_best.pt
+tracker:
+  type: botsort
+  config: configs/botsort.yaml
+tracker_input:
+  mode: replay
+  tracks_experiment: yolo26_botsort_tracks_occl_heldout_v2_001
+motion_memory:
+  enabled: true
+  config: experiments/motion_memory_anchor_dev/mm_configs/anchor_lost25.yaml
+  extra_name: anchor_lost25
+scenarios:
+  group: heldout
+  index: data/occlusion_test_scenarios/v2/heldout/index.json
+  config_sha256: 1c02e6dd77afbdea3e8f76c5e6087a42989e14bfd64e42f18b154edb3c1ea396
+  seed: 20261113
+  count: 720
+  partial: false
+  limit_scenarios: null
+  config_version: 2
+  screening_sha256: 7ac20cefa6f5c862ae84abc42d8c5c90d8249ea97668562d0f3903b253392854
+  target_lock:
+    match_iou: 0.5
+    max_search_frames: 10
+    lock_confirm_frames: 3
+    lock_iou: 0.5
+    required_detectors:
+    - yolo11
+    - yolo26
+metrics_config:
+  path: /home/ezycloudx-admin/drone-tracking/configs/occlusion_metrics_v2.yaml
+  version: 2
+  config_sha256: c221ba7abcba9f1539147214de294b8b487753de48ddd766da7dcd728e459a5a
+heldout:
+  plan:
+    path: configs/heldout_report_plan.yaml
+    sha256: ede00d887d952b382e6be6b9869fc66dac2ca495795da02b4ea78254f0c0a3c8
+    version: 1
+  plan_tag: v2_001
+  rerun_note: null
+  git:
+    commit: aa1299f794d6ce4a62b827b61b8b5ddbac874434
+    clean: true
+    clean_definition: 'sach <=> (1) `git status --porcelain --untracked-files=no`
+      rong: khong file DA TRACK nao bi sua/staged/xoa/doi ten so voi HEAD; (2) moi
+      file ke hoach tham chieu deu da track trong HEAD. File untracked va file bi
+      .gitignore (output, du lieu) KHONG tinh.'
+  weights_sha256:
+    yolo11: 82f0be26b04e3e4fdf09dea0b038a587aa01a262c380e6abab58afc751339fed
+    yolo26: 6b7223db8f0e8f16a18bb53d0c82ff48bd33902eb2100e9337142b2f63f11c3a
+  column: mm_anchor_lost25
+  role: descriptive
