@@ -43,7 +43,8 @@ metrics -> chi danh gia lai; loi -> bao, khong xoa.
 (mac dinh tune_limit<N>), ket qua partial - KHONG dung de chon cau hinh,
 khong chay duoc vong 2/--select.
 --jobs N: so tien trinh song song (moi lenh la mot subprocess Python rieng;
-mac dinh so nhan CPU - 2). Moi subprocess bi gioi han 1 luong BLAS/OpenMP.
+mac dinh so nhan CPU - 2). Moi subprocess: 1 luong BLAS/OpenMP, khong thay GPU
+(CUDA_VISIBLE_DEVICES rong) - run_context cua lan replay ghi khong co GPU.
 """
 
 from __future__ import annotations
@@ -84,9 +85,15 @@ def default_jobs() -> int:
     return max(1, (os.cpu_count() or 3) - 2)
 
 
+def subprocess_env() -> dict[str, str]:
+    """Moi subprocess: 1 luong BLAS/OpenMP, AN GPU (replay chi can CPU; tranh moi
+    tien trinh song song tao mot CUDA context khi run_context hoi thong tin GPU)."""
+    return {**os.environ, **{k: "1" for k in THREAD_ENV}, "CUDA_VISIBLE_DEVICES": ""}
+
+
 def subprocess_runner(cmd: list[str]) -> int:
     """Chay mot lenh; output giu lai, chi in khi loi (tranh tron output song song)."""
-    env = {**os.environ, **{k: "1" for k in THREAD_ENV}}
+    env = subprocess_env()
     proc = subprocess.run(cmd, cwd=str(REPO_ROOT), env=env, capture_output=True, text=True)
     if proc.returncode != 0:
         tail = (proc.stderr or proc.stdout or "").strip().splitlines()[-5:]

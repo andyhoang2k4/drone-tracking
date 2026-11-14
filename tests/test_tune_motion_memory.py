@@ -233,3 +233,8 @@ def test_default_jobs_leaves_two_cores(monkeypatch):
     assert tune.default_jobs() == 1
     with pytest.raises(SystemExit):
         tune.parse_args(["--round", "1", "--jobs", "0"])
+
+
+def test_subprocess_env_single_thread_and_no_gpu():
+    env = tune.subprocess_env()
+    assert env["CUDA_VISIBLE_DEVICES"] == "" and env["OMP_NUM_THREADS"] == "1" and env["MKL_NUM_THREADS"] == "1"
