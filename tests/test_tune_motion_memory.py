@@ -200,10 +200,10 @@ def test_limit_scenarios_is_partial_separate_and_cannot_select(tune_env, capsys)
     assert tune.main(base + ["--round", "1", "--limit-scenarios", "1"], runner) == 0
     assert runner.count("compare") == 0                      # khong cung tap kich ban voi baseline -> khong so sanh
     assert runner.count("pipeline") == N_R1 * len(DETS) + PREFLIGHT
-    s = summary(tmp, "motion_memory_tuning_dev_tune_limit1")
+    s = summary(tmp, "motion_memory_tuning_dev_tune_limit1_run1")
     assert s["partial"] is True and s["round1"]["status"] == "incomplete"
     assert s["selection"]["status"] == "not_available" and s["conclusion"] is None
-    assert (tmp / "experiments" / "yolo11_botsort_mm_occl_dev_tune_limit1_default" / "metrics.json").is_file()
+    assert (tmp / "experiments" / "yolo11_botsort_mm_occl_dev_tune_limit1_run1_default" / "metrics.json").is_file()
     assert not (tmp / "experiments" / "motion_memory_tuning_dev").exists()
     for extra in (["--round", "2"], ["--select"]):
         with pytest.raises(SystemExit):
@@ -225,7 +225,8 @@ def test_changed_defaults_or_rules_refused(tune_env, tmp_path):
     edited = tmp_path / "edited.yaml"
     edited.write_text(text + "# sua sau khi chay\n", encoding="utf-8")
     with pytest.raises(ValueError, match="cau hinh khac"):
-        tune.main(base + ["--round", "1", "--limit-scenarios", "1", "--config", str(edited)], FakeRunner())
+        tune.main(base + ["--round", "1", "--limit-scenarios", "1", "--tag", "tune_limit1_run1",
+                          "--config", str(edited)], FakeRunner())
 
 
 def test_default_jobs_leaves_two_cores(monkeypatch):
@@ -240,3 +241,27 @@ def test_default_jobs_leaves_two_cores(monkeypatch):
 def test_subprocess_env_single_thread_and_no_gpu():
     env = tune.subprocess_env()
     assert env["CUDA_VISIBLE_DEVICES"] == "" and env["OMP_NUM_THREADS"] == "1" and env["MKL_NUM_THREADS"] == "1"
+
+
+def test_limit_runs_get_new_numbered_tag_and_never_touch_old_failed_run(tune_env, capsys):
+    """Lan chay loi tren cloud (tag cu tune_limit6) phai giu nguyen; lan chay thu moi tu danh so."""
+    tmp, base, weights = tune_env
+    run_source(tmp, weights)
+    exps = tmp / "experiments"
+    old = [exps / "motion_memory_tuning_dev_tune_limit6" / "summary.json",
+           exps / "yolo11_botsort_mm_occl_dev_tune_limit6_default" / "config.yaml"]
+    for f in old:
+        f.parent.mkdir(parents=True)
+        f.write_text(f"lan chay loi cu {f.name}", encoding="utf-8")
+    before = {f: f.read_bytes() for f in old}
+    assert tune.main(base + ["--round", "1", "--limit-scenarios", "6"], FakeRunner()) == 0
+    assert "Tag lan chay thu: tune_limit6_run1" in capsys.readouterr().out
+    assert (exps / "motion_memory_tuning_dev_tune_limit6_run1" / "summary.json").is_file()
+    assert {f: f.read_bytes() for f in old} == before
+    assert sorted(p.name for p in (exps / "yolo11_botsort_mm_occl_dev_tune_limit6_default").iterdir()) == ["config.yaml"]
+    assert tune.parse_args(base + ["--round", "1", "--limit-scenarios", "6"]).tag == "tune_limit6_run2"
+    with pytest.raises(SystemExit):                                   # tag cu: tu choi
+        tune.parse_args(base + ["--round", "1", "--limit-scenarios", "6", "--tag", "tune_limit6"])
+    runner = FakeRunner()                                             # resume dung tag da in
+    assert tune.main(base + ["--round", "1", "--limit-scenarios", "6", "--tag", "tune_limit6_run1"], runner) == 0
+    assert runner.count("pipeline") == PREFLIGHT

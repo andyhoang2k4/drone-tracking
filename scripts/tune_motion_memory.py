@@ -39,8 +39,10 @@ configs/motion_memory_tuned.yaml (khong ghi de configs/motion_memory.yaml).
 
 Resume: kich ban da co metrics.json bi bo qua; log pipeline co ma chua co
 metrics -> chi danh gia lai; loi -> bao, khong xoa.
---limit-scenarios N: chi N kich ban dau (thu nghiem), tag rieng
-(mac dinh tune_limit<N>), ket qua partial - KHONG dung de chon cau hinh,
+--limit-scenarios N: chi N kich ban dau (thu nghiem), tag rieng tu danh so
+tune_limit<N>_run<k> (k nho nhat chua dung - khong dung vao thu muc cua lan
+chay truoc; resume: --tag <tag do>; tag dinh dang cu tune_limit<N> bi tu
+choi), ket qua partial - KHONG dung de chon cau hinh,
 khong chay duoc vong 2/--select.
 --jobs N: so tien trinh song song (moi lenh la mot subprocess Python rieng;
 mac dinh so nhan CPU - 2). Moi subprocess: 1 luong BLAS/OpenMP, khong thay GPU
@@ -138,14 +140,34 @@ def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
     if args.limit_scenarios is not None and args.limit_scenarios < 1:
         parser.error("--limit-scenarios phai >= 1")
     if args.tag is None:
-        args.tag = DEFAULT_TAG if args.limit_scenarios is None else f"{DEFAULT_TAG}_limit{args.limit_scenarios}"
+        args.tag = DEFAULT_TAG if args.limit_scenarios is None else next_limit_tag(
+            args.output_root, args.limit_scenarios)
     elif args.limit_scenarios is not None and args.tag == DEFAULT_TAG:
         parser.error(f"--limit-scenarios khong dung tag '{DEFAULT_TAG}' cua lan chay du")
+    elif re.fullmatch(rf"{DEFAULT_TAG}_limit\d+", args.tag):
+        parser.error(f"tag '{args.tag}' la dinh dang cu (truoc ban sua 2026-11-14), danh cho lan chay loi da co - "
+                     f"khong dung lai; bo --tag de tu danh so ({DEFAULT_TAG}_limit<N>_run<k>)")
     if args.select and args.limit_scenarios is not None:
         parser.error("--select khong dung voi --limit-scenarios (ket qua partial khong dung de chon)")
     if args.round == 2 and args.limit_scenarios is not None:
         parser.error("--round 2 can vong 1 day du, khong dung voi --limit-scenarios")
     return args
+
+
+def tag_in_use(output_root: Path, tag: str) -> bool:
+    """Da co thu muc nao cua tag (summary hoac experiment tung cau hinh, moi nhom)?"""
+    root = Path(output_root)
+    return any(root.glob(f"motion_memory_tuning_*_{tag}")) or any(root.glob(f"*_occl_*_{tag}_*"))
+
+
+def next_limit_tag(output_root: Path, limit: int) -> str:
+    """Tag tu dong cho lan chay thu --limit-scenarios: <tune>_limit<N>_run<k>, k nho nhat CHUA
+    dung -> khong bao gio ghi vao thu muc cua lan chay truoc (ke ca lan chay loi; dinh dang cu
+    <tune>_limit<N> khong bao gio duoc sinh lai). Muon resume mot lan chay thu: --tag <tag do>."""
+    k = 1
+    while tag_in_use(output_root, f"{DEFAULT_TAG}_limit{limit}_run{k}"):
+        k += 1
+    return f"{DEFAULT_TAG}_limit{limit}_run{k}"
 
 
 def _repo_path(value: str) -> Path:
@@ -904,6 +926,8 @@ def print_summary(summary: dict, path: Path) -> None:
 def main(argv: Optional[list[str]] = None, runner: Runner = subprocess_runner) -> int:
     args = parse_args(argv)
     ctx = build_context(args)
+    if args.limit_scenarios is not None:
+        print(f"Tag lan chay thu: {args.tag} (resume: --tag {args.tag}); ket qua o {ctx.summary_dir.name}/")
     if not args.dry_run:
         abl.ensure_experiment_config(ctx.summary_dir, run_config(ctx))
 

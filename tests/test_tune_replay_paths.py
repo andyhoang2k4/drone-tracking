@@ -79,8 +79,8 @@ def test_replay_through_real_subprocess_with_real_meta(monkeypatch, repo_tmp, tm
     argv = ["--round", "1", "--limit-scenarios", "1", "--jobs", "4",
             "--scenario-root", _arg(src["scn"], tune_style), "--output-root", str(src["exps"]),
             "--tuned-output", str(tmp_path / "tuned.yaml")]
+    tag = tune.parse_args(argv).tag                                # tag tu danh so, tinh TRUOC khi chay
     assert tune.main(argv) == 0                                    # tune.subprocess_runner: subprocess that
-    tag = tune.parse_args(argv).tag
     for det in DETS:
         exp = src["exps"] / f"{det}_botsort_mm_occl_dev_{tag}_default"
         agg = json.loads((exp / "metrics.json").read_text(encoding="utf-8"))
