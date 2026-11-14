@@ -34,9 +34,20 @@ test). Ket qua bi danh dau trong config.yaml (khong tron voi lan chay du) va
 `aggregate` chay voi --allow-incomplete (complete=false) -> KHONG phai benchmark.
 Cuoi moi lan chay in thoi gian tung loai lenh va uoc tinh cho ca nhom.
 
+Kich ban v2 (configs/occlusion_scenarios_v2.yaml, index co `screening`) +
+metrics v2 (mac dinh --metrics-config configs/occlusion_metrics_v2.yaml):
+    - moi --detector phai co trong screening cua kich ban VA cung weights
+      (sha256) - neu khong, tap muc tieu da loc khong hop le -> tu choi;
+    - run_pipeline nhan --gt-match-iou / --gt-max-search-frames tu
+      manifest.target_lock (khong tu configs/eval_visdrone.yaml);
+    - evaluate dung metrics v2: kich ban chua khoa duoc dem rieng.
+Kich ban v1 (lan chay thu "timing"): --metrics-config configs/occlusion_metrics.yaml.
+Metrics v2 tren kich ban v1 (va nguoc lai) -> tu choi.
+
 Vi du (tren cloud)::
 
-    python scripts/run_occlusion_ablation.py --group dev --tag 001 \\
+    python scripts/run_occlusion_ablation.py --group dev --tag v2_001 \\
+        --scenario-root data/occlusion_test_scenarios/v2 \\
         --detector yolo11=weights/yolo11_best.pt --detector yolo26=weights/yolo26_best.pt \\
         --device 0 --dry-run
 """
@@ -58,6 +69,9 @@ if str(REPO_ROOT) not in sys.path:
 
 DEFAULT_SCENARIO_ROOT = REPO_ROOT / "data" / "occlusion_test_scenarios"
 DEFAULT_MM_CONFIG = REPO_ROOT / "configs" / "motion_memory.yaml"
+# Metrics v2 (mac dinh) chi dung cho kich ban v2 (index co screening); kich ban
+# v1 (lan chay thu "timing") dung --metrics-config configs/occlusion_metrics.yaml.
+DEFAULT_METRICS_CONFIG = REPO_ROOT / "configs" / "occlusion_metrics_v2.yaml"
 
 Runner = Callable[[list[str]], int]
 
@@ -143,6 +157,8 @@ def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
     parser.add_argument("--scenario-root", type=Path, default=DEFAULT_SCENARIO_ROOT)
     parser.add_argument("--output-root", type=Path, default=REPO_ROOT / "experiments")
     parser.add_argument("--motion-memory-config", type=Path, default=DEFAULT_MM_CONFIG)
+    parser.add_argument("--metrics-config", type=Path, default=DEFAULT_METRICS_CONFIG,
+                        help="Dinh nghia do do (mac dinh v2; kich ban v1: configs/occlusion_metrics.yaml)")
     parser.add_argument("--device", default=None)
     parser.add_argument("--allow-partial-index", action="store_true",
                         help="Cho phep index danh dau partial (smoke test, KHONG phai benchmark)")
@@ -174,7 +190,7 @@ def load_index(scenario_root: Path, group: str, allow_partial: bool) -> tuple[Pa
 
 
 def _scenarios_config(args: argparse.Namespace, index_path: Path, index: dict) -> dict:
-    return {
+    out = {
         "group": args.group,
         "index": str(index_path),
         "config_sha256": index.get("config_sha256"),
@@ -184,9 +200,51 @@ def _scenarios_config(args: argparse.Namespace, index_path: Path, index: dict) -
         # Khac None -> chi N kich ban dau (do thoi gian), khong phai benchmark.
         "limit_scenarios": args.limit_scenarios,
     }
+    if index.get("screening"):  # kich ban v2
+        out["config_version"] = index.get("config_version")
+        out["screening_sha256"] = index["screening"].get("sha256")
+        out["target_lock"] = index.get("target_lock")
+    return out
 
 
-def experiment_config(spec: RunSpec, args: argparse.Namespace, index_path: Path, index: dict) -> dict:
+def metrics_config_summary(args: argparse.Namespace) -> dict:
+    """Version + sha256 cua dinh nghia do do (ghi vao config.yaml cua experiment)."""
+    from src.evaluate import load_occlusion_metrics_config
+
+    cfg = load_occlusion_metrics_config(args.metrics_config)
+    return {"path": str(args.metrics_config), "version": cfg["version"], "config_sha256": cfg["config_sha256"]}
+
+
+def check_scenarios_and_detectors(args: argparse.Namespace, index: dict, metrics: dict) -> None:
+    """Metrics v2 <=> kich ban v2; detector + weights sha256 phai khop screening."""
+    screening = index.get("screening")
+    if metrics["version"] >= 2 and not screening:
+        raise ValueError(
+            f"Metrics v{metrics['version']} chi dung cho kich ban v2 (index co screening); kich ban v1: "
+            "dung --metrics-config configs/occlusion_metrics.yaml"
+        )
+    if metrics["version"] < 2 and screening:
+        raise ValueError("Kich ban v2 phai danh gia bang metrics v2 (configs/occlusion_metrics_v2.yaml)")
+    if not screening:
+        return
+    from src.occlusion_scenarios import file_sha256
+
+    recorded = screening.get("detectors") or {}
+    for name, weights in args.detector:
+        if name not in recorded:
+            raise ValueError(f"Detector {name!r} khong co trong screening cua kich ban (co: {sorted(recorded)})")
+        if not Path(weights).is_file():
+            raise ValueError(f"Khong thay weights {weights} cua {name}")
+        if file_sha256(weights) != recorded[name].get("weights_sha256"):
+            raise ValueError(
+                f"Weights {weights} cua {name} khac weights da dung khi screening (sha256 khac) - tap muc "
+                "tieu khong con hop le cho detector nay"
+            )
+
+
+def experiment_config(
+    spec: RunSpec, args: argparse.Namespace, index_path: Path, index: dict, metrics: Optional[dict] = None
+) -> dict:
     return {
         "experiment_id": spec.exp_id,
         "purpose": "Ablation Motion Memory tren kich ban occlusion nhan tao (CLAUDE.md muc 12)",
@@ -201,7 +259,7 @@ def experiment_config(spec: RunSpec, args: argparse.Namespace, index_path: Path,
             "config": str(args.motion_memory_config) if spec.motion_memory else None,
         },
         "scenarios": _scenarios_config(args, index_path, index),
-        "metrics_config": "configs/occlusion_metrics.yaml",
+        "metrics_config": metrics if metrics is not None else metrics_config_summary(args),
     }
 
 
@@ -277,14 +335,21 @@ def pipeline_command(
         "--gt-annotation", str(scen_dir / "annotations.txt"),
         "--gt-first-frame", str(manifest.get("first_frame", 1)),
     ]
+    lock = manifest.get("target_lock")
+    if lock:  # kich ban v2: tham so chon muc tieu lay tu manifest (co version), khong tu eval_visdrone.yaml
+        cmd += ["--gt-match-iou", str(lock["match_iou"]),
+                "--gt-max-search-frames", str(lock["max_search_frames"])]
     if spec.motion_memory:
         cmd += ["--motion-memory", "--motion-memory-config", str(args.motion_memory_config)]
     return cmd
 
 
-def evaluate_command(scen_dir: Path, run_dir: Path) -> list[str]:
-    return [sys.executable, "-m", "src.evaluate", "occlusion",
-            "--scenario-dir", str(scen_dir), "--run-dir", str(run_dir)]
+def evaluate_command(scen_dir: Path, run_dir: Path, metrics_config: Optional[Path] = None) -> list[str]:
+    cmd = [sys.executable, "-m", "src.evaluate", "occlusion",
+           "--scenario-dir", str(scen_dir), "--run-dir", str(run_dir)]
+    if metrics_config is not None:
+        cmd += ["--metrics-config", str(metrics_config)]
+    return cmd
 
 
 def default_runner(cmd: list[str]) -> int:
@@ -293,6 +358,8 @@ def default_runner(cmd: list[str]) -> int:
 
 def run_ablation(args: argparse.Namespace, runner: Runner = default_runner) -> Report:
     index_path, index = load_index(args.scenario_root, args.group, args.allow_partial_index)
+    metrics = metrics_config_summary(args)
+    check_scenarios_and_detectors(args, index, metrics)
     group_dir = args.scenario_root / args.group
     report = Report()
 
@@ -325,7 +392,7 @@ def run_ablation(args: argparse.Namespace, runner: Runner = default_runner) -> R
         for name, weights, tracks_dir, specs in detectors:
             ensure_experiment_config(tracks_dir, tracks_config(name, weights, args, index_path, index))
             for spec in specs:
-                ensure_experiment_config(spec.exp_dir, experiment_config(spec, args, index_path, index))
+                ensure_experiment_config(spec.exp_dir, experiment_config(spec, args, index_path, index, metrics))
 
     for name, weights, tracks_dir, specs in detectors:
         complete = {spec.exp_id: True for spec in specs}
@@ -378,7 +445,7 @@ def run_ablation(args: argparse.Namespace, runner: Runner = default_runner) -> R
                 label = f"{spec.exp_id}/{scen_name}"
                 if (run_dir / "logs" / "pipeline.jsonl").is_file():
                     # Log da co (lan truoc bi ngat sau khi chay xong?) - chi danh gia lai.
-                    if call(evaluate_command(scen_dir, run_dir)) == 0:
+                    if call(evaluate_command(scen_dir, run_dir, args.metrics_config)) == 0:
                         report.recovered.append(label)
                     else:
                         report.failed.append(f"{label} (log cu khong hop le - can xu ly tay)")
@@ -388,7 +455,7 @@ def run_ablation(args: argparse.Namespace, runner: Runner = default_runner) -> R
                     report.failed.append(f"{label} (run_pipeline loi)")
                     complete[spec.exp_id] = False
                     continue
-                if call(evaluate_command(scen_dir, run_dir)) != 0:
+                if call(evaluate_command(scen_dir, run_dir, args.metrics_config)) != 0:
                     report.failed.append(f"{label} (evaluate loi)")
                     complete[spec.exp_id] = False
                     continue

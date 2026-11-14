@@ -26,6 +26,7 @@ from src.motion_memory import BBox  # noqa: E402
 
 N, OCC_LO, OCC_HI, GT_ID = 20, 6, 10, 42
 CASES = ("new_id", "never", "same_id")
+METRICS_V1 = REPO_ROOT / "configs" / "occlusion_metrics.yaml"
 
 
 def gt_box(k: int) -> BBox:
@@ -114,7 +115,9 @@ def env(tmp_path, monkeypatch):
     make_group(scen_root)
     base = ["--group", "dev", "--tag", "001", "--scenario-root", str(scen_root),
             "--output-root", str(tmp_path / "experiments"),
-            "--detector", "yolo11=w11.pt", "--detector", "yolo26=w26.pt"]
+            "--detector", "yolo11=w11.pt", "--detector", "yolo26=w26.pt",
+            # kich ban gia o day la v1 (khong screening) -> metrics v1 ro rang (mac dinh runner la v2)
+            "--metrics-config", str(METRICS_V1)]
     return tmp_path, base
 
 
@@ -208,7 +211,8 @@ def test_partial_index_refused(tmp_path):
     root = tmp_path / "scn"
     make_group(root, partial=True)
     args = ["--group", "dev", "--tag", "x", "--scenario-root", str(root),
-            "--output-root", str(tmp_path / "e"), "--detector", "y=w.pt", "--dry-run"]
+            "--output-root", str(tmp_path / "e"), "--detector", "y=w.pt", "--dry-run",
+            "--metrics-config", str(METRICS_V1)]
     with pytest.raises(ValueError, match="partial"):
         abl.main(args, FakeRunner())
     assert abl.main(args + ["--allow-partial-index"], FakeRunner()) == 0
@@ -321,3 +325,145 @@ def test_limit_scenarios_not_mixed_with_full_run(env):
 def test_limit_scenarios_must_be_positive():
     with pytest.raises(SystemExit):
         abl.parse_args(["--group", "dev", "--tag", "1", "--detector", "a=x", "--limit-scenarios", "0"])
+
+
+# ---------------- kich ban v2 (screening) + metrics v2 ----------------
+
+V2_CASES = ("new_id", "same_id", "unseen")   # unseen: detector khong thay muc tieu -> chua khoa
+V2_LOCK = {"match_iou": 0.5, "max_search_frames": 4, "lock_confirm_frames": 3, "lock_iou": 0.5}
+
+
+def fake_tracks_v2(source: str):
+    case = next(c for c in V2_CASES if c in Path(source).parent.name)
+    out = []
+    for k in range(N):
+        tracks = [{"track_id": 9, "bbox": [500, 400, 540, 420], "conf": 0.9, "cls": 3}]
+        if case != "unseen":
+            tid = 1 if k <= 5 else {"new_id": 2, "same_id": 1}[case] if k > OCC_HI else None
+            if tid is not None:
+                tracks.append({"track_id": tid, "bbox": list(gt_box(k).as_tuple()), "conf": 0.8, "cls": 3})
+        out.append({"frame_idx": k, "path": str(Path(source) / f"{k + 1:07d}.jpg"), "tracks": tracks})
+    return out
+
+
+def make_group_v2(root: Path, weights: dict, group: str = "dev") -> list[str]:
+    from src.occlusion_scenarios import file_sha256
+
+    screening = {"file": "screening.json", "sha256": "scr",
+                 "detectors": {n: {"weights_sha256": file_sha256(p)} for n, p in weights.items()}}
+    names = []
+    for case in V2_CASES:
+        name = f"seqA__t{GT_ID}__d005__{case}"
+        scen = root / group / name
+        (scen / "images").mkdir(parents=True)
+        lines, rows = [], []
+        for k in range(N):
+            (scen / "images" / f"{k + 1:07d}.jpg").write_bytes(b"")
+            b = gt_box(k)
+            lines.append(f"{k + 1},{GT_ID},{int(b.x1)},{int(b.y1)},{int(b.width)},{int(b.height)},1,4,0,0")
+            rows.append({"frame_idx": k, "source_frame": k + 1, "bbox": list(b.as_tuple()),
+                         "occluded": OCC_LO <= k <= OCC_HI, "occluder_bbox": None})
+        (scen / "annotations.txt").write_text("\n".join(lines) + "\n", encoding="utf-8")
+        (scen / "manifest.json").write_text(json.dumps({
+            "scenario_id": f"{group}/{name}", "name": name, "group": group,
+            "source": {"split_dir": "VAL", "sequence": "seqA", "first_source_frame": 1, "last_source_frame": N},
+            "target": {"gt_target_id": GT_ID, "class": 3, "category": 4},
+            "frames": N, "first_frame": 1,
+            "occlusion": {"start_frame_idx": OCC_LO, "end_frame_idx": OCC_HI, "duration_frames": 5,
+                          "occluder": "full_solid", "coverage": "full", "texture": "solid"},
+            "ground_truth": rows, "seed": 1, "config_version": 2, "config_sha256": "v2sha",
+            "target_lock": {**V2_LOCK, "required_detectors": sorted(weights), "occlusion_start_frame_idx": OCC_LO},
+            "screening": screening,
+        }), encoding="utf-8")
+        names.append(name)
+    (root / group / "index.json").write_text(json.dumps({
+        "group": group, "scenarios": names, "partial": False, "seed": 1, "config_sha256": "v2sha",
+        "config_version": 2, "screening": screening,
+        "target_lock": {**V2_LOCK, "required_detectors": sorted(weights)},
+    }), encoding="utf-8")
+    return names
+
+
+@pytest.fixture
+def env_v2(tmp_path, monkeypatch):
+    monkeypatch.setattr(tr, "iter_tracks", lambda w, s, **k: iter(fake_tracks_v2(s)))
+
+    def no_yolo(*a, **k):
+        raise AssertionError("run_pipeline khong duoc chay YOLO khi replay")
+
+    monkeypatch.setattr(rp, "iter_tracks", no_yolo)
+    weights = {}
+    for name in ("yolo11", "yolo26"):
+        weights[name] = tmp_path / f"{name}.pt"
+        weights[name].write_bytes(f"weights-{name}".encode())
+    make_group_v2(tmp_path / "scn", weights)
+    base = ["--group", "dev", "--tag", "v2", "--scenario-root", str(tmp_path / "scn"),
+            "--output-root", str(tmp_path / "experiments"),
+            "--detector", f"yolo11={weights['yolo11']}", "--detector", f"yolo26={weights['yolo26']}"]
+    return tmp_path, base, weights
+
+
+def test_v2_pipeline_gets_lock_args_from_manifest(env_v2, capsys):
+    _, base, _ = env_v2
+    assert abl.main(base + ["--dry-run"], FakeRunner()) == 0
+    out = capsys.readouterr().out
+    n_pipeline = 2 * 2 * len(V2_CASES)
+    assert out.count("--gt-match-iou 0.5 --gt-max-search-frames 4") == n_pipeline
+    assert out.count("occlusion_metrics_v2.yaml") == n_pipeline   # evaluate occlusion dung metrics v2
+
+
+def test_v2_full_run_counts_not_locked_separately_and_resumes(env_v2, capsys):
+    tmp, base, _ = env_v2
+    assert abl.main(base, FakeRunner()) == 0
+    exps = tmp / "experiments"
+    import yaml
+
+    for det in ("yolo11", "yolo26"):
+        for mm in ("", "mm_"):
+            exp = exps / f"{det}_botsort_{mm}occl_dev_v2"
+            agg = json.loads((exp / "metrics.json").read_text())
+            o = agg["overall"]
+            assert agg["metrics_config"]["version"] == 2
+            assert o["scenarios_total"] == 3 and o["scenarios_evaluated"] == 2 and o["scenarios_not_locked"] == 1
+            assert o["not_locked_scenario_ids"] == [f"dev/seqA__t{GT_ID}__d005__unseen"]
+            assert o["independent_targets"] == 1 and o["independent_sequences"] == 1
+            conf = yaml.safe_load((exp / "config.yaml").read_text())
+            assert conf["metrics_config"]["version"] == 2 and len(conf["metrics_config"]["config_sha256"]) == 64
+            assert conf["scenarios"]["screening_sha256"] == "scr" and conf["scenarios"]["config_version"] == 2
+        cmp_ = json.loads((exps / f"{det}_botsort_mm_occl_dev_v2" / f"ablation_vs_{det}_botsort_occl_dev_v2.json")
+                          .read_text())
+        assert cmp_["scenarios_evaluated"] == 2 and cmp_["scenarios_not_locked"] == 1
+        assert cmp_["baseline"]["overall"]["reidentification_rate"] == 0.5    # same_id / (same_id + new_id)
+        assert cmp_["memory"]["overall"]["reidentification_rate"] == 1.0
+    out = capsys.readouterr().out
+    assert "Thoi gian (giay):" in out
+
+    runner = FakeRunner()                                   # resume: khong chay lai gi
+    assert abl.main(base, runner) == 0
+    assert runner.count("track") == 0 and runner.count("pipeline") == 0 and runner.count("occlusion") == 0
+
+
+def test_v2_refuses_weights_not_matching_screening(env_v2):
+    tmp, base, weights = env_v2
+    weights["yolo26"].write_bytes(b"weights da doi")
+    with pytest.raises(ValueError, match="sha256 khac"):
+        abl.main(base + ["--dry-run"], FakeRunner())
+
+
+def test_v2_refuses_detector_not_in_screening(env_v2):
+    tmp, base, weights = env_v2
+    args = [a.replace("yolo26=", "rtdetr=") for a in base]
+    with pytest.raises(ValueError, match="khong co trong screening"):
+        abl.main(args + ["--dry-run"], FakeRunner())
+
+
+def test_metrics_version_must_match_scenario_version(env_v2, tmp_path):
+    _, base, _ = env_v2
+    with pytest.raises(ValueError, match="metrics v2"):
+        abl.main(base + ["--dry-run", "--metrics-config", str(METRICS_V1)], FakeRunner())
+    root = tmp_path / "scn_v1"
+    make_group(root)
+    args = ["--group", "dev", "--tag", "x", "--scenario-root", str(root),
+            "--output-root", str(tmp_path / "e"), "--detector", "y=w.pt", "--dry-run"]
+    with pytest.raises(ValueError, match="kich ban v1"):
+        abl.main(args, FakeRunner())                        # mac dinh metrics v2 tren kich ban v1
