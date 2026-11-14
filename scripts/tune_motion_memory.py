@@ -53,11 +53,13 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import subprocess
 import sys
 import threading
 import time
-from concurrent.futures import ThreadPoolExecutor
+from collections import Counter
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -447,6 +449,57 @@ class Report:
     commands: list[list[str]] = field(default_factory=list)
     timings: dict[str, list[float]] = field(default_factory=dict)
     wall_seconds: float = 0.0
+    cancelled: int = 0
+    stopped: Optional[dict] = None   # dung som: dot, thong bao, so lenh, vi du lenh + output
+
+
+# Dung som: trong mot dot (hau ky / gop / so sanh), khi da chay >= min(N, so muc
+# cua dot) lenh va > 50% lenh da chay loi CUNG mot thong bao -> dung dot, khong
+# chay tiep cac dot sau.
+EARLY_STOP_MIN_COMMANDS = 20
+EARLY_STOP_FRACTION = 0.5
+_EXC_LINE = re.compile(r"^[\w.]*(Error|Exception|Exit)\b")
+
+
+def error_signature(output: str, code: int) -> str:
+    """Thong bao dai dien cua mot lenh loi: dong exception cuoi (hoac dong cuoi), bo
+    phan rieng tung kich ban (chuoi trong dau nhay, so) de cac lan loi cung loai trung nhau."""
+    lines = [line.strip() for line in output.strip().splitlines() if line.strip()]
+    line = next((x for x in reversed(lines) if _EXC_LINE.match(x)), lines[-1] if lines else "")
+    if not line:
+        return f"ma thoat {code}, khong co output"
+    line = re.sub(r"'[^']*'", "'...'", line)
+    line = re.sub(r'"[^"]*"', '"..."', line)
+    return re.sub(r"\d+", "N", line)
+
+
+class BatchMonitor:
+    """Dem lenh da chay / loi theo thong bao trong mot dot; quyet dinh dung som."""
+
+    def __init__(self, name: str, items: int):
+        self.name = name
+        self.min_commands = max(1, min(EARLY_STOP_MIN_COMMANDS, items))
+        self.lock = threading.Lock()
+        self.done = 0
+        self.counts: Counter = Counter()
+        self.examples: dict[str, tuple[list[str], str]] = {}
+        self.stop = threading.Event()
+        self.stopped: Optional[dict] = None
+
+    def record(self, cmd: list[str], code: int, output: str) -> None:
+        with self.lock:
+            self.done += 1
+            if code == 0:
+                return
+            sig = error_signature(output, code)
+            self.counts[sig] += 1
+            self.examples.setdefault(sig, (cmd, output))
+            if (self.stopped is None and self.done >= self.min_commands
+                    and self.counts[sig] > EARLY_STOP_FRACTION * self.done):
+                ex_cmd, ex_out = self.examples[sig]
+                self.stopped = {"batch": self.name, "signature": sig, "failed": self.counts[sig],
+                                "commands_done": self.done, "example_command": ex_cmd, "example_output": ex_out}
+                self.stop.set()
 
 
 def preflight_static(ctx: Context, configs: list[dict]) -> None:
@@ -498,6 +551,8 @@ def run_configs(ctx: Context, configs: list[dict], runner: Runner) -> Report:
     args, report, lock = ctx.args, Report(), threading.Lock()
     group_dir = args.scenario_root / ctx.rules.group
 
+    monitor = {"current": BatchMonitor("", 1)}
+
     def call(cmd: list[str]) -> int:
         with lock:
             report.commands.append(cmd)
@@ -509,7 +564,29 @@ def run_configs(ctx: Context, configs: list[dict], runner: Runner) -> Report:
             report.timings.setdefault(abl.command_kind(cmd), []).append(time.perf_counter() - start)
         if code != 0:
             print(f"LOI ({code}): {' '.join(cmd[:4])} ...\n{output_tail(output, 10)}", flush=True)
+        monitor["current"].record(cmd, code, output)
         return code
+
+    def run_batch(name: str, items: list, work: Callable) -> list:
+        """Chay `work` song song tren items; dung som theo BatchMonitor. Tra ve ket qua
+        cac muc da chay (muc bi bo do dung som khong co trong ket qua)."""
+        mon = BatchMonitor(name, len(items))
+        monitor["current"] = mon
+
+        def guarded(item):
+            return None if mon.stop.is_set() else work(item)
+
+        results = []
+        with ThreadPoolExecutor(max_workers=args.jobs) as pool:
+            for fut in as_completed([pool.submit(guarded, it) for it in items]):
+                res = fut.result()
+                if res is None:
+                    report.cancelled += 1
+                else:
+                    results.append(res)
+        if mon.stopped is not None:
+            report.stopped = mon.stopped
+        return results
 
     prepared = []
     for cfg in configs:
@@ -544,11 +621,13 @@ def run_configs(ctx: Context, configs: list[dict], runner: Runner) -> Report:
     incomplete: set[str] = set()
     for scen in ctx.scenarios:          # nap manifest truoc (khong doc song song cung dict)
         ctx.manifest(scen)
-    with ThreadPoolExecutor(max_workers=args.jobs) as pool:
-        for exp_id, status, label in pool.map(do_unit, units):
-            getattr(report, status).append(label)
-            if status == "failed":
-                incomplete.add(exp_id)
+    for exp_id, status, label in run_batch("hau ky (run_pipeline + evaluate occlusion)", units, do_unit):
+        getattr(report, status).append(label)
+        if status == "failed":
+            incomplete.add(exp_id)
+    if report.stopped is not None:
+        report.wall_seconds = time.perf_counter() - start
+        return report
 
     # Gop + so sanh moi (cau hinh, detector) du kich ban.
     def do_aggregate(item) -> tuple[str, bool]:
@@ -556,11 +635,10 @@ def run_configs(ctx: Context, configs: list[dict], runner: Runner) -> Report:
         return spec.exp_id, call(abl.aggregate_command(spec.exp_dir, ctx.index_path, ctx.partial)) == 0
 
     todo = [p for p in prepared if p[2].exp_id not in incomplete]
-    with ThreadPoolExecutor(max_workers=args.jobs) as pool:
-        for exp_id, ok in pool.map(do_aggregate, todo):
-            (report.aggregated.append(exp_id) if ok else report.failed.append(f"{exp_id} (aggregate loi)"))
+    for exp_id, ok in run_batch("evaluate aggregate", todo, do_aggregate):
+        (report.aggregated.append(exp_id) if ok else report.failed.append(f"{exp_id} (aggregate loi)"))
 
-    if not ctx.partial:   # compare can CUNG tap kich ban voi baseline nguon (du nhom)
+    if not ctx.partial and report.stopped is None:   # compare can CUNG tap kich ban voi baseline nguon (du nhom)
         def do_compare(job) -> tuple[str, bool]:
             base_dir, mem_dir = job
             out = mem_dir / f"ablation_vs_{base_dir.name}.json"
@@ -571,9 +649,8 @@ def run_configs(ctx: Context, configs: list[dict], runner: Runner) -> Report:
             if spec.exp_id not in report.aggregated and not args.dry_run:
                 continue
             jobs.append((ctx.sources[det]["baseline_dir"], spec.exp_dir))
-        with ThreadPoolExecutor(max_workers=args.jobs) as pool:
-            for label, ok in pool.map(do_compare, jobs):
-                (report.compared.append(label) if ok else report.failed.append(f"{label} (compare loi)"))
+        for label, ok in run_batch("evaluate compare", jobs, do_compare):
+            (report.compared.append(label) if ok else report.failed.append(f"{label} (compare loi)"))
     report.wall_seconds = time.perf_counter() - start
     return report
 
@@ -776,8 +853,6 @@ def write_tuned_config(ctx: Context, summary: dict) -> Optional[Path]:
 # ---------------- in ----------------
 
 def print_report(ctx: Context, report: Report, configs: list[dict]) -> None:
-    from collections import Counter
-
     counts = Counter(abl.command_kind(c) for c in report.commands)
     prefix = "[dry-run] " if ctx.args.dry_run else ""
     print(f"{prefix}{len(configs)} cau hinh x {len(ctx.rules.detectors)} detector x {len(ctx.scenarios)} "
@@ -849,7 +924,13 @@ def main(argv: Optional[list[str]] = None, runner: Runner = subprocess_runner) -
     if configs:
         report = run_configs(ctx, configs, runner)
         print_report(ctx, report, configs)
-        failed = bool(report.failed)
+        failed = bool(report.failed) or report.stopped is not None
+        if report.stopped is not None:
+            st = report.stopped
+            print(f"DUNG SOM (dot {st['batch']}): {st['failed']}/{st['commands_done']} lenh da chay loi cung thong "
+                  f"bao (> {EARLY_STOP_FRACTION:.0%}); bo {report.cancelled} muc chua chay.\n"
+                  f"Thong bao: {st['signature']}\nVi du lenh: {' '.join(st['example_command'])}\n"
+                  f"Output:\n{output_tail(st['example_output'])}", flush=True)
     if args.dry_run:
         return 0
     summary = build_summary(ctx)

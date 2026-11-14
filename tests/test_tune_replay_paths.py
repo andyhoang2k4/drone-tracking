@@ -175,3 +175,59 @@ def test_preflight_static_mismatch_refused_even_in_dry_run(monkeypatch, repo_tmp
                        "--output-root", str(src["exps"])] + extra, runner)
         assert "tracker" in str(exc.value) and "yolo26/" + src["names"][1] in str(exc.value)
     assert runner.calls == []
+
+
+# ---------------- dung som ----------------
+
+def _replay_error(cmd) -> str:
+    scen = cmd[cmd.index("--experiment-id") + 1]
+    return LONG_ERROR.replace("/abs/x/images", f"/abs/{scen}/images").replace("'x/images'", f"'{scen}/images'")
+
+
+def test_error_signature_ignores_per_scenario_details():
+    a = tune.error_signature(_replay_error(["--experiment-id", "s1"]), 1)
+    b = tune.error_signature(_replay_error(["--experiment-id", "s2"]), 1)
+    assert a == b == "scripts.run_pipeline.ReplayError: Log track khong khop tham so:"
+    assert tune.error_signature("", 3) == "ma thoat 3, khong co output"
+    assert tune.error_signature("FileNotFoundError: '/a/b1.txt' 12 lan", 1) == "FileNotFoundError: '...' N lan"
+
+
+def _replay_runner(fail):
+    """Pre-flight (thu muc tam) thanh cong; lenh replay cua kich ban: fail(n) -> loi."""
+    state = {"n": 0}
+
+    def run(cmd):
+        if not cmd[1].endswith("run_pipeline.py"):
+            return 0
+        if "tune_preflight_" in cmd[cmd.index("--output-root") + 1]:
+            return 0
+        state["n"] += 1
+        return (1, _replay_error(cmd)) if fail(state["n"]) else (0, "")
+    return run
+
+
+def test_early_stop_when_most_commands_fail_with_same_message(monkeypatch, repo_tmp, tmp_path, capsys):
+    src = build_source(monkeypatch, repo_tmp, tmp_path, "relative")
+    runner = RecordingRunner(_replay_runner(lambda n: True))
+    argv = ["--round", "1", "--jobs", "1", "--scenario-root", _arg(src["scn"], "absolute"),
+            "--output-root", str(src["exps"])]
+    assert tune.main(argv, runner) == 1
+    out = capsys.readouterr().out
+    replays = [c for c in runner.calls if c[1].endswith("run_pipeline.py")]
+    assert len(replays) == len(DETS) + tune.EARLY_STOP_MIN_COMMANDS      # pre-flight + 20 roi dung (48 du kien)
+    assert not [c for c in runner.calls if "aggregate" in c]               # khong sang dot sau
+    assert "DUNG SOM (dot hau ky" in out and "20/20 lenh" in out
+    assert "Thong bao: scripts.run_pipeline.ReplayError: Log track khong khop tham so:" in out
+    assert "Vi du lenh: " in out and "--replay-tracks" in out
+    assert "dong traceback 0" in out                                       # output day du (> 5 dong cuoi)
+
+
+def test_scattered_failures_do_not_stop_early(monkeypatch, repo_tmp, tmp_path, capsys):
+    src = build_source(monkeypatch, repo_tmp, tmp_path, "relative")
+    runner = RecordingRunner(_replay_runner(lambda n: n % 3 == 0))        # 1/3 loi (< 50%)
+    argv = ["--round", "1", "--jobs", "2", "--scenario-root", _arg(src["scn"], "absolute"),
+            "--output-root", str(src["exps"])]
+    assert tune.main(argv, runner) == 1                                    # co loi -> ma 1, nhung chay het
+    replays = [c for c in runner.calls if c[1].endswith("run_pipeline.py")]
+    assert len(replays) == len(DETS) + 8 * len(DETS) * len(src["names"])
+    assert "DUNG SOM" not in capsys.readouterr().out
