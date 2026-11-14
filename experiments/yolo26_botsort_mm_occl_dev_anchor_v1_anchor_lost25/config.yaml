@@ -1,0 +1,48 @@
+# Sinh boi scripts/run_occlusion_ablation.py - khong sua sau khi da co ket qua.
+experiment_id: yolo26_botsort_mm_occl_dev_anchor_v1_anchor_lost25
+purpose: Tune Motion Memory (dev, replay log tracker nguon) - mot cau hinh cua luoi
+detector:
+  name: yolo26
+  weights: weights/eval/yolo26_best.pt
+tracker:
+  type: botsort
+  config: configs/botsort.yaml
+tracker_input:
+  mode: replay
+  tracks_experiment: yolo26_botsort_tracks_occl_dev_v2_001
+motion_memory:
+  enabled: true
+  config: /home/ezycloudx-admin/drone-tracking/experiments/motion_memory_anchor_dev/mm_configs/anchor_lost25.yaml
+scenarios:
+  group: dev
+  index: /home/ezycloudx-admin/drone-tracking/data/occlusion_test_scenarios/v2/dev/index.json
+  config_sha256: 1c02e6dd77afbdea3e8f76c5e6087a42989e14bfd64e42f18b154edb3c1ea396
+  seed: 20261113
+  count: 336
+  partial: false
+  limit_scenarios: null
+  config_version: 2
+  screening_sha256: 273278cedc02fe2540c90dbc404c24ac5b148fdcb4791a42ea0b5425c8b70daa
+  target_lock:
+    match_iou: 0.5
+    max_search_frames: 10
+    lock_confirm_frames: 3
+    lock_iou: 0.5
+    required_detectors:
+    - yolo11
+    - yolo26
+metrics_config:
+  path: /home/ezycloudx-admin/drone-tracking/configs/occlusion_metrics_v2.yaml
+  version: 2
+  config_sha256: c221ba7abcba9f1539147214de294b8b487753de48ddd766da7dcd728e459a5a
+tuning:
+  config:
+    path: configs/motion_memory_anchor_dev.yaml
+    version: 1
+    sha256: 8baf5b9d19eb31dae9cbdbc62fc7904b1c39d2021b46c2cb2e56e731c0a6291c
+  config_id: anchor_lost25
+  round: variant
+  overrides:
+    lost_timeout_frames: 25
+    anchor_recovery: true
+  mm_config_sha256: 4537f52717d6ba91df1c48b2493d54c893ff0bff23b34402a82f2668fa389346

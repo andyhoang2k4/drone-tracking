@@ -1,0 +1,17 @@
+# Cau hinh Motion Memory DA TUNE tren dev - sinh boi scripts/tune_motion_memory.py --select.
+# Quy tac: motion_memory_tuning_dev.yaml version 1 sha256 5f87f58eb1e3bd13d31c99c87ebf808a49fe1b0e0ca5ddb08e4f29758586df97
+# Cau hinh chon: r1_lost_timeout_frames_25; khac mac dinh: {"lost_timeout_frames": 25}
+# Chi tiet: motion_memory_tuning_dev/summary.json. KHONG tinh chinh them tren heldout.
+# Dung cho heldout: scripts/run_occlusion_ablation.py --motion-memory-config <file nay>
+motion_memory:
+  lost_timeout_frames: 25
+  reid_timeout_frames: 45
+  history_size: 30
+  velocity_window_frames: 8
+  min_history: 3
+  velocity_decay: 0.95
+  min_speed_ratio: 0.02
+  match_iou: 0.3
+  match_center_ratio: 0.5
+  match_gate_growth: 0.1
+  max_scale_change: 2.0
