@@ -79,7 +79,19 @@ Mode PX4: `STABILIZED` (= "Angle"), `ACRO`, `OFFBOARD` (cho Auto). PX4 không c�
 - Camera chỉ render khi có subscriber trên topic của nó (ví dụ chạy kèm `gz topic -e -t <topic> > /dev/null &`). Thẻ `<save enabled="true"><path>…</path></save>` trong `<camera>` ghi ảnh PNG; tên file chứa `::`, cần đổi tên trước khi tải về Windows.
 - Hình học đo trên world thử (camera cao 12 m, pitch 0.7854, hfov 1.5708, 1344x756): vật cao 1.7 m cách ~18 m cao ~64 px trong ảnh, khớp ước tính tay ~63 px (f ≈ 672 px).
 
-Chưa kiểm: `make px4_sitl gz_x500_gimbal`; `GzCameraSource` với Gazebo thật; binding `python3-gz-transport13`/`python3-gz-msgs10` (cài bằng apt vào Python hệ thống) có import được từ `.venv` của dự án hay không; asset người/xe từ Fuel; YOLO11-seg và YOLO26-seg trên ảnh Gazebo (probe domain-gap, xem CLAUDE.md §2, quyết định 2026-11-15).
+Cập nhật thêm (2026-11-15, phiên probe):
+- PX4 SITL build được: `env -u VIRTUAL_ENV nice -n 19 make -j6 px4_sitl` → `build/px4_sitl_default/bin/px4`. Phải bỏ `VIRTUAL_ENV`
+  nếu shell đang trỏ tới một venv khác: CMake FindPython3 theo biến này và báo thiếu `kconfiglib`.
+- Venv riêng cho sim tạo bằng `python3 -m venv --system-site-packages` thì import được `gz.transport13`/`gz.msgs10` (apt). Nếu
+  `~/.local` có gói lệch version (ví dụ pandas cần numpy 2), chạy với `PYTHONNOUSERSITE=1`.
+- Asset Fuel: `gz fuel download -u https://fuel.gazebosim.org/1.0/OpenRobotics/models/<Tên>` (Hatchback, SUV, Pickup, Walking person,
+  Casual female, Male visitor, Standing person) dùng được trong `<include><uri>` bằng URL Fuel. Hatchback tham chiếu
+  `model://hatchback/...`: cần `GZ_SIM_RESOURCE_PATH` trỏ tới thư mục có `hatchback/` (symlink tới cache phiên bản); thân xe vẫn thiếu texture.
+- Render bằng CPU (Mesa llvmpipe qua EGL) không chạy được: ogre2 báo "OpenGL 3.3 is not supported" rồi segfault. Cần GPU.
+- `boundingbox_camera` với `<box_type>2d</box_type>` + `<save>` ghi `boxes/boxes_*.csv` (`label,x_center,y_center,width,height`) theo plugin Label.
+
+Chưa kiểm: `make px4_sitl gz_x500_gimbal` (mới build, chưa chạy kèm Gazebo); `GzCameraSource` với Gazebo thật; YOLO11-seg/YOLO26-seg trên ảnh
+Gazebo (probe domain-gap, CLAUDE.md §2: đã render khung + GT bbox ngoài repo, chưa chạy detector). Probe không phải benchmark.
 
 File probe: scripts/sim_probe/ (smoke_world.sdf, check_pixels.py). Chạy từ thư mục ngoài repo: ảnh ghi vào frames_smoke/ theo thư mục đang chạy gz sim.
 
