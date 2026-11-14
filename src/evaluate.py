@@ -12,7 +12,11 @@ Trang thai file:
     - `compute_occlusion_metrics()` + danh gia kich ban occlusion tu log
       run_pipeline va manifest (`python -m src.evaluate occlusion|aggregate|
       compare`): DA implement (roadmap buoc 4). Dinh nghia do do:
-      configs/occlusion_metrics.yaml va docstring compute_occlusion_metrics.
+      configs/occlusion_metrics.yaml (v1) va docstring compute_occlusion_metrics.
+    - Metrics v2 (configs/occlusion_metrics_v2.yaml, mac dinh tu 2026-11-14):
+      chi tinh ti le tren kich ban co muc tieu "khoa duoc truoc khi che"
+      (target_lock_for_run, tren log track replay dung chung), dem rieng kich
+      ban chua khoa; compare tu choi neu tap da khoa khac nhau. v1 giu nguyen.
 
 Vi du (moi sequence mot lan, log tao boi src/track.py voi --source la thu muc
 anh cua dung sequence do)::
@@ -735,7 +739,10 @@ def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
 
 # ---------------- kich ban occlusion: log run_pipeline + manifest ----------------
 
-DEFAULT_OCCLUSION_METRICS_CONFIG = REPO_ROOT / "configs" / "occlusion_metrics.yaml"
+# Mac dinh v2 (2026-11-14). v1 (configs/occlusion_metrics.yaml) giu de tai hien
+# lan chay thu "timing" tren kich ban v1: truyen --metrics-config ro rang.
+DEFAULT_OCCLUSION_METRICS_CONFIG = REPO_ROOT / "configs" / "occlusion_metrics_v2.yaml"
+OCCLUSION_METRICS_CONFIG_V1 = REPO_ROOT / "configs" / "occlusion_metrics.yaml"
 PIPELINE_LOG = Path("logs") / "pipeline.jsonl"
 SCENARIO_RUNS_DIR = "scenarios"   # experiments/<id>/scenarios/<ten kich ban>/
 SCENARIO_METRICS_NAME = "metrics.json"
@@ -743,17 +750,92 @@ SCENARIO_METRICS_NAME = "metrics.json"
 RUN_KEYS = ("weights", "tracker", "conf", "imgsz", "classes", "motion_memory")
 
 
+SUPPORTED_METRICS_VERSIONS = (1, 2)
+
+
 def load_occlusion_metrics_config(path: Union[str, Path]) -> dict[str, Any]:
+    from src.occlusion_scenarios import config_sha256
+
     cfg = _load_yaml(Path(path))
     for key in ("version", "correct_iou", "reid_min_consecutive_frames"):
         if key not in cfg:
             raise EvaluationError(f"{path}: thieu khoa {key}")
+    version = int(cfg["version"])
+    if version not in SUPPORTED_METRICS_VERSIONS:
+        raise EvaluationError(f"{path}: version {version} khong ho tro {SUPPORTED_METRICS_VERSIONS}")
     return {
-        "version": int(cfg["version"]),
+        "version": version,
         "correct_iou": float(cfg["correct_iou"]),
         "reid_min_consecutive_frames": int(cfg["reid_min_consecutive_frames"]),
         "path": str(path),
+        "config_sha256": config_sha256(Path(path).read_bytes()),
     }
+
+
+def _read_replay_tracks(context: Mapping[str, Any]) -> list[dict[str, Any]]:
+    """Log track replay ma lan chay da dung (run_context.replay), kiem tra SHA-256."""
+    import hashlib
+
+    replay = context.get("replay") or {}
+    path = replay.get("tracks_log")
+    if not path:
+        raise EvaluationError(
+            "metrics v2 can lan chay dung --replay-tracks (tinh 'khoa duoc' tren log track dung chung)"
+        )
+    path = Path(str(path))
+    if not path.is_file():
+        raise EvaluationError(f"Khong thay log track replay {path}")
+    raw = path.read_bytes()
+    if hashlib.sha256(raw).hexdigest() != replay.get("tracks_sha256"):
+        raise EvaluationError(f"{path}: SHA-256 khac run_context.replay.tracks_sha256 (log da bi doi?)")
+    return [json.loads(line) for line in raw.decode("utf-8").splitlines() if line.strip()]
+
+
+def target_lock_for_run(
+    manifest: Mapping[str, Any],
+    context: Mapping[str, Any],
+    selection: Mapping[str, Any],
+) -> dict[str, Any]:
+    """'Khoa duoc truoc khi che' (metrics v2) cua mot lan chay tren kich ban v2.
+
+    Tinh lai tren log track replay bang evaluate_target_lock voi tham so trong
+    manifest.target_lock; doi chieu voi target_selection.json cua lan chay (lech
+    -> lan chay dung tham so chon muc tieu khac manifest -> loi).
+    """
+    from src.utils.gt_target import LockRule, evaluate_target_lock
+
+    lock_cfg = manifest.get("target_lock")
+    if not lock_cfg:
+        raise EvaluationError(
+            f"{manifest.get('scenario_id')}: manifest khong co target_lock - metrics v2 chi dung cho "
+            "kich ban v2 (configs/occlusion_scenarios_v2.yaml); kich ban v1 dung "
+            "--metrics-config configs/occlusion_metrics.yaml"
+        )
+    first_frame = int(manifest.get("first_frame", 1))
+    gt_boxes = {int(r["frame_idx"]) + first_frame: BBox(*r["bbox"]) for r in manifest["ground_truth"]}
+    a = int(lock_cfg["occlusion_start_frame_idx"])
+    if a != int(manifest["occlusion"]["start_frame_idx"]):
+        raise EvaluationError("target_lock.occlusion_start_frame_idx khac occlusion.start_frame_idx")
+    lock = evaluate_target_lock(
+        _read_replay_tracks(context), gt_boxes, LockRule.from_mapping(lock_cfg), a,
+        first_frame=first_frame, gt_target_id=manifest["target"]["gt_target_id"],
+    )
+    run_frame = selection.get("selected_frame_idx")
+    run_id = selection.get("selected_track_id") if run_frame is not None and run_frame < a else None
+    rule = lock["rule"]
+    if (selection.get("match_iou"), selection.get("max_search_frames")) != (
+        rule["match_iou"], rule["max_search_frames"]
+    ):
+        raise EvaluationError(
+            f"Lan chay chon muc tieu voi match_iou={selection.get('match_iou')}, "
+            f"max_search_frames={selection.get('max_search_frames')} khac manifest.target_lock {rule}"
+        )
+    if run_id != lock["selection"]["selected_track_id"]:
+        raise EvaluationError(
+            f"Track chon boi lan chay ({run_id}) khac track tinh lai tu log replay "
+            f"({lock['selection']['selected_track_id']})"
+        )
+    return lock
 
 
 def read_pipeline_log(path: Path) -> list[dict[str, Any]]:
@@ -879,6 +961,11 @@ def evaluate_occlusion_run(
 
     from src.utils.run_context import git_info
 
+    lock_result: Optional[dict[str, Any]] = None
+    if int(metrics_config["version"]) >= 2:
+        lock_result = target_lock_for_run(manifest, context, selection)
+        recovery["target_locked_at_occlusion"] = bool(lock_result["locked"])
+
     occ = manifest["occlusion"]
     return {
         "scenario_id": manifest["scenario_id"],
@@ -892,6 +979,7 @@ def evaluate_occlusion_run(
             "coverage": occ["coverage"],
             "texture": occ["texture"],
             "config_sha256": manifest.get("config_sha256"),
+            "config_version": manifest.get("config_version"),
             "scenario_dir": str(scenario_dir),
         },
         "run": {
@@ -905,6 +993,7 @@ def evaluate_occlusion_run(
             "versions": context.get("versions"),
         },
         "target_selection": selection,
+        **({"target_lock": lock_result} if lock_result is not None else {}),
         "metrics_config": dict(metrics_config),
         "metrics": {**asdict(metrics), **recovery},
         "warnings": warnings,
@@ -945,6 +1034,54 @@ def _pool(items: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
     }
 
 
+def _is_locked(item: Mapping[str, Any]) -> bool:
+    value = item["metrics"].get("target_locked_at_occlusion")
+    if value is None:
+        raise EvaluationError(
+            f"{item.get('scenario_id')}: thieu target_locked_at_occlusion (metrics v1?) - "
+            "khong gop voi metrics v2"
+        )
+    return bool(value)
+
+
+def _target_key(item: Mapping[str, Any]) -> tuple[str, Any]:
+    scen = item["scenario"]
+    return (str(scen.get("sequence")), scen.get("gt_target_id"))
+
+
+def _pool_v2(items: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
+    """Gop metrics v2: moi ti le/tong/gap/time-to-reidentify CHI tren kich ban da
+    khoa truoc khi che; kich ban chua khoa duoc dem va liet ke rieng."""
+    locked = [it for it in items if _is_locked(it)]
+    not_locked = [it for it in items if not _is_locked(it)]
+    core = _pool(locked)
+    core.pop("scenarios")
+    per_sequence: dict[str, dict[str, Any]] = {}
+    for it in items:
+        seq = str(it["scenario"].get("sequence"))
+        row = per_sequence.setdefault(
+            seq, {"scenarios_total": 0, "scenarios_evaluated": 0, "_targets": set(), "_locked": set()}
+        )
+        row["scenarios_total"] += 1
+        row["_targets"].add(_target_key(it))
+        if _is_locked(it):
+            row["scenarios_evaluated"] += 1
+            row["_locked"].add(_target_key(it))
+    for row in per_sequence.values():
+        row["targets_total"] = len(row.pop("_targets"))
+        row["targets_evaluated"] = len(row.pop("_locked"))
+    return {
+        "scenarios_total": len(items),
+        "scenarios_evaluated": len(locked),
+        "scenarios_not_locked": len(not_locked),
+        "not_locked_scenario_ids": sorted(it["scenario_id"] for it in not_locked),
+        "independent_targets": len({_target_key(it) for it in locked}),
+        "independent_sequences": len({_target_key(it)[0] for it in locked}),
+        "per_sequence": dict(sorted(per_sequence.items())),
+        **core,
+    }
+
+
 def _provenance(items: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
     """Commit git / version package cua cac lan chay duoc gop (CLAUDE.md muc 14)."""
     runs = [it["run"] for it in items]
@@ -954,7 +1091,16 @@ def _provenance(items: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
         "git_dirty_runs": sum(1 for r in runs if r.get("git_dirty")),
         "versions": [json.loads(v) for v in sorted(versions)],
         "tracks_logs": sum(1 for r in runs if r.get("tracks_sha256")),
+        "scenario_config_sha256": sorted({str(it["scenario"].get("config_sha256")) for it in items}),
+        "metrics_config_sha256": sorted({str(it["metrics_config"].get("config_sha256")) for it in items}),
     }
+
+
+V2_NOTE = (
+    "metrics v2: moi ti le/tong/gap/time-to-reidentify chi tinh tren kich ban co muc tieu khoa "
+    "duoc truoc khi che (target_locked_at_occlusion); kich ban chua khoa dem rieng. Ket qua co "
+    "dieu kien tren muc tieu ma ca hai detector khoa duoc (screening) - thien lech ve muc tieu de."
+)
 
 
 def aggregate_occlusion_metrics(items: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
@@ -973,31 +1119,37 @@ def aggregate_occlusion_metrics(items: Sequence[Mapping[str, Any]]) -> dict[str,
         raise EvaluationError("Cac kich ban dung tham so Motion Memory khac nhau - khong gop duoc")
     metric_cfgs = {
         (it["metrics_config"]["version"], it["metrics_config"]["correct_iou"],
-         it["metrics_config"]["reid_min_consecutive_frames"])
+         it["metrics_config"]["reid_min_consecutive_frames"],
+         str(it["metrics_config"].get("config_sha256")))
         for it in items
     }
     if len(metric_cfgs) != 1:
         raise EvaluationError(f"Cac kich ban dung dinh nghia do do khac nhau: {sorted(metric_cfgs)}")
+    version = int(items[0]["metrics_config"]["version"])
+    pool = _pool_v2 if version >= 2 else _pool
 
     def by(key: str) -> dict[str, Any]:
         buckets: dict[Any, list] = {}
         for it in items:
             buckets.setdefault(it["scenario"][key], []).append(it)
-        return {str(k): _pool(v) for k, v in sorted(buckets.items())}
+        return {str(k): pool(v) for k, v in sorted(buckets.items())}
 
     first = items[0]
-    return {
+    result = {
         "group": groups.pop(),
         "run": {k: first["run"].get(k) for k in RUN_KEYS},
         "motion_memory_config": first["run"].get("motion_memory_config"),
         "metrics_config": first["metrics_config"],
         # Metrics tung kich ban khong commit (.gitignore) -> giu nguon goc o ban gop.
         "provenance": _provenance(items),
-        "overall": _pool(items),
+        "overall": pool(items),
         "by_duration_frames": by("duration_frames"),
         "by_occluder": by("occluder"),
         "scenario_ids": sorted(it["scenario_id"] for it in items),
     }
+    if version >= 2:
+        result["note"] = V2_NOTE
+    return result
 
 
 def load_scenario_metrics(exp_dir: Path) -> dict[str, dict[str, Any]]:
@@ -1057,9 +1209,11 @@ def compare_ablation(baseline_dir: Path, memory_dir: Path) -> dict[str, Any]:
         raise EvaluationError("Khong so sanh cong bang duoc:\n  " + "\n  ".join(problems[:20]))
     b_agg = aggregate_occlusion_metrics(list(base.values()))
     m_agg = aggregate_occlusion_metrics(list(mem.values()))
-    if b_agg["metrics_config"]["version"] != m_agg["metrics_config"]["version"]:
-        raise EvaluationError("Hai experiment dung dinh nghia do do khac version")
-    return {
+    if (b_agg["metrics_config"]["version"], b_agg["metrics_config"].get("config_sha256")) != (
+        m_agg["metrics_config"]["version"], m_agg["metrics_config"].get("config_sha256")
+    ):
+        raise EvaluationError("Hai experiment dung dinh nghia do do khac version/config")
+    result = {
         "baseline_experiment": str(baseline_dir),
         "memory_experiment": str(memory_dir),
         "scenarios": len(base),
@@ -1067,6 +1221,27 @@ def compare_ablation(baseline_dir: Path, memory_dir: Path) -> dict[str, Any]:
         "memory": m_agg,
         "warnings": warnings,
     }
+    if int(b_agg["metrics_config"]["version"]) >= 2:
+        differ = sorted(n for n in base if _is_locked(base[n]) != _is_locked(mem[n]))
+        if differ:
+            raise EvaluationError(
+                f"Tap kich ban da khoa khac nhau giua baseline va Motion Memory ({len(differ)} kich "
+                f"ban, vd {differ[:3]}) - khong so sanh cong bang duoc"
+            )
+        result["scenarios_evaluated"] = sum(1 for n in base if _is_locked(base[n]))
+        result["scenarios_not_locked"] = len(base) - result["scenarios_evaluated"]
+        result["note"] = V2_NOTE
+    return result
+
+
+def default_metrics_config(scenario_dir: Path, given: Optional[Path]) -> Path:
+    """--metrics-config da cho, hoac chon theo manifest (v2 neu co target_lock)."""
+    if given is not None:
+        return given
+    from src.occlusion_scenarios import load_manifest
+
+    manifest = load_manifest(scenario_dir)
+    return DEFAULT_OCCLUSION_METRICS_CONFIG if manifest.get("target_lock") else OCCLUSION_METRICS_CONFIG_V1
 
 
 def _occlusion_cli(argv: list[str]) -> int:
@@ -1074,14 +1249,17 @@ def _occlusion_cli(argv: list[str]) -> int:
 
     parser = argparse.ArgumentParser(
         prog="python -m src.evaluate",
-        description="Do do kich ban occlusion (configs/occlusion_metrics.yaml)",
+        description="Do do kich ban occlusion (mac dinh configs/occlusion_metrics_v2.yaml; "
+                    "v1: configs/occlusion_metrics.yaml)",
     )
     sub = parser.add_subparsers(dest="command", required=True)
     one = sub.add_parser("occlusion", help="Danh gia mot lan chay tren mot kich ban")
     one.add_argument("--scenario-dir", type=Path, required=True)
     one.add_argument("--run-dir", type=Path, required=True, help="Thu muc --output-root/<experiment-id> cua run_pipeline")
     one.add_argument("--output", type=Path, default=None, help="Mac dinh <run-dir>/metrics.json")
-    one.add_argument("--metrics-config", type=Path, default=DEFAULT_OCCLUSION_METRICS_CONFIG)
+    one.add_argument("--metrics-config", type=Path, default=None,
+                     help="Bo trong = theo manifest: kich ban v2 (co target_lock) -> "
+                          "configs/occlusion_metrics_v2.yaml, kich ban v1 -> configs/occlusion_metrics.yaml")
 
     agg = sub.add_parser("aggregate", help="Gop metrics cac kich ban cua mot experiment")
     agg.add_argument("--exp-dir", type=Path, required=True)
@@ -1097,7 +1275,8 @@ def _occlusion_cli(argv: list[str]) -> int:
     args = parser.parse_args(argv)
     if args.command == "occlusion":
         result = evaluate_occlusion_run(
-            args.scenario_dir, args.run_dir, load_occlusion_metrics_config(args.metrics_config)
+            args.scenario_dir, args.run_dir,
+            load_occlusion_metrics_config(default_metrics_config(args.scenario_dir, args.metrics_config)),
         )
         out = args.output or args.run_dir / SCENARIO_METRICS_NAME
         write_json(out, result)
@@ -1111,7 +1290,13 @@ def _occlusion_cli(argv: list[str]) -> int:
         result = {**aggregate_occlusion_metrics(list(found.values())), "completeness": completeness}
         out = args.output or args.exp_dir / SCENARIO_METRICS_NAME
         write_json(out, result)
-        print(f"Gop {result['overall']['scenarios']} kich ban, complete={completeness['complete']}")
+        o = result["overall"]
+        if "scenarios_total" in o:  # metrics v2
+            print(f"Gop {o['scenarios_total']} kich ban: {o['scenarios_evaluated']} da khoa (tinh ti le), "
+                  f"{o['scenarios_not_locked']} chua khoa (dem rieng); {o['independent_targets']} muc "
+                  f"tieu, {o['independent_sequences']} sequence; complete={completeness['complete']}")
+        else:
+            print(f"Gop {o['scenarios']} kich ban, complete={completeness['complete']}")
         print(f"Da ghi: {out}")
     else:
         result = compare_ablation(args.baseline, args.memory)

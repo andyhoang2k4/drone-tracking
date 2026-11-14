@@ -1,0 +1,45 @@
+# Dinh nghia + nguong do do occlusion - VERSION 2 (CLAUDE.md muc 12).
+# Doc boi `python -m src.evaluate occlusion|aggregate|compare` (src/evaluate.py).
+# Ban v1 (configs/occlusion_metrics.yaml) giu nguyen de truy vet lan chay thu
+# "timing" (2026-11-13); v1 va v2 KHONG gop chung (aggregate/compare tu choi).
+#
+# CO DINH TRUOC KHI CO BAT KY SO LIEU THAT NAO CUA MOTION MEMORY TREN DU LIEU
+# OCCLUSION (quyet dinh 2026-11-14). Doi dinh nghia/nguong sau khi da xem ket
+# qua -> tang `version`, KHONG sua tai cho (CLAUDE.md muc 13).
+#
+# KHAC v1:
+#   1. Moi kich ban co `target_locked_at_occlusion` = muc tieu "khoa duoc truoc
+#      khi che" theo khoi `target_lock` trong manifest (sinh tu
+#      configs/occlusion_scenarios_v2.yaml):
+#        (1) GtTargetSelector (match_iou, max_search_frames, KHONG xet class)
+#            chon duoc track tren cac frame truoc khi che;
+#        (2) track da chon co IoU >= lock_iou voi GT o MOI frame trong
+#            lock_confirm_frames frame lien truoc khi che.
+#      Tinh tren LOG TRACK REPLAY dung chung (src/utils/gt_target.py
+#      evaluate_target_lock), KHONG tren output cua tung cau hinh -> baseline
+#      va Motion Memory co CUNG tap kich ban da khoa. Danh gia v2 bat buoc lan
+#      chay dung --replay-tracks (scripts/run_occlusion_ablation.py luon dung).
+#   2. Kich ban CHUA khoa bi LOAI khoi moi ti le, tong, gap, time-to-reidentify
+#      (mau so = so kich ban da khoa), va duoc bao cao RIENG: scenarios_total,
+#      scenarios_not_locked, not_locked_scenario_ids (ca trong tung nhom thoi
+#      luong / kieu che).
+#   3. Bao cao them independent_targets, independent_sequences va so kich ban /
+#      muc tieu theo tung sequence (per_sequence) - de sau nay lam khoang tin
+#      cay theo sequence (16 kich ban cua mot muc tieu tuong quan manh).
+#   4. compare tu choi neu hai cau hinh co tap kich ban da khoa khac nhau.
+#
+# THIEN LECH CHON MAU (ghi trong moi bao cao): ket qua chi co dieu kien tren
+# muc tieu ma CA HAI detector khoa duoc truoc khi che (xem screening.json) -
+# nghieng ve vat lon, tuong phan cao, lop pho bien; khong suy rong cho muc tieu
+# kho. So sanh YOLO11 vs YOLO26 tren occlusion chi tren tap giao do.
+#
+# Dinh nghia tung kich ban (output, du doan dung, output xac nhan,
+# correct_prediction_ratio, longest_tracking_gap, reidentified,
+# time_to_reidentify_frames, mean_position_error_px,
+# reidentified_with_new_track_id, target_acquired_before_occlusion): GIONG v1
+# (xem configs/occlusion_metrics.yaml). Gop nhieu kich ban: cong gop tu so /
+# mau so tren cac kich ban DA KHOA, khong lay trung binh ti le tung kich ban.
+
+version: 2
+correct_iou: 0.5
+reid_min_consecutive_frames: 3
