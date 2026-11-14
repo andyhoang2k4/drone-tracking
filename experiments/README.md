@@ -74,3 +74,28 @@ kich ban.
 Nhom `dev` dung de tinh chinh tham so Motion Memory; nhom `heldout` chi chay
 MOT lan sau khi da chot tham so (doi tham so sau khi xem heldout -> tag moi va
 ghi ro trong README cua experiment).
+
+## Tune Motion Memory tren dev (`scripts/tune_motion_memory.py`)
+
+Quy tac dang ky truoc: `configs/motion_memory_tuning_dev.yaml` (version +
+sha256 ghi vao moi config.yaml/summary.json). Chi replay log tracker cua
+ablation nguon (`source_tag`, vd `v2_001`), khong chay YOLO.
+
+| Duong dan | Git |
+|---|---|
+| `motion_memory_tuning_dev/config.yaml` | commit |
+| `motion_memory_tuning_dev/summary.json` (moi cau hinh, metrics gop, per_sequence, vong 1/2, cau hinh chon, ket luan, sha256 quy tac + log tracker) | commit |
+| `motion_memory_tuning_dev/mm_configs/<id>.yaml` (tham so day du tung cau hinh) | commit |
+| `<det>_botsort_mm_occl_dev_tune_<id>/{config.yaml,metrics.json,ablation_vs_*.json}` | commit |
+| `<det>_botsort_mm_occl_dev_tune_<id>/scenarios/` | gitignore - sao luu |
+| `motion_memory_tuning_dev_tune_limit<N>/`, `*_tune_limit<N>_*` (`--limit-scenarios`, partial) | thu nghiem, khong dung de chon; giu lai neu da chay (khong xoa lich su) |
+
+- Luu MOI cau hinh, ke ca cau hinh xau; khong co vong 3, khong them luoi sau
+  khi co ket qua.
+- Cau hinh `default` duoc chay lai cung code; summary ghi
+  `default_reproduces_source_motion_memory` (so voi `<det>_botsort_mm_occl_dev_v2_001`).
+- Ket luan "giu cau hinh mac dinh" la ket qua hop le, ghi ro trong summary.
+- `configs/motion_memory_tuned.yaml` chi duoc ghi khi chon duoc cau hinh;
+  `configs/motion_memory.yaml` khong bao gio bi ghi de.
+- Heldout: chay `run_occlusion_ablation.py --group heldout --tag <tag moi>
+  --motion-memory-config configs/motion_memory_tuned.yaml` MOT lan.

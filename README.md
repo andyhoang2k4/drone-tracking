@@ -37,7 +37,10 @@ khong sua ma nguon noi bo cua `ultralytics`.
 | `configs/occlusion_scenarios_v2.yaml` | Kich ban occlusion **v2** (mac dinh): 12 ung vien/sequence, screening khoa muc tieu (`target_lock`), giu toi da 4 muc tieu dat/sequence; output `data/occlusion_test_scenarios/v2/` |
 | `configs/occlusion_metrics.yaml` | Dinh nghia + nguong do do occlusion **v1** (kich ban chua khoa van tinh vao tong) |
 | `configs/occlusion_metrics_v2.yaml` | Do do occlusion **v2** (mac dinh): chi tinh ti le tren kich ban da khoa truoc khi che, dem rieng kich ban chua khoa |
+| `configs/motion_memory_tuning_dev.yaml` | Quy tac tune Motion Memory tren dev **dang ky truoc** (luoi, diem, hop le, bien 0.01, toi da 2 vong) |
+| `configs/motion_memory_tuned.yaml` | (chi co khi tuning chon duoc cau hinh) tham so Motion Memory da tune - dung cho heldout |
 | `src/occlusion_scenarios.py` | Sinh kich ban occlusion co GT moi frame (v2: loc theo screening.json) |
+| `src/motion_memory_tuning.py` | Ham thuan chon cau hinh Motion Memory theo quy tac tuning (sinh luoi, diem, hop le, chon) |
 | `src/occlusion_screening.py` | Screening khoa muc tieu tren clip sach truoc khi che (luat chon muc tieu that cua pipeline) |
 | `src/detect.py` | Chay detection, log JSONL |
 | `src/track.py` | Chay detection + BoT-SORT, log JSONL |
@@ -48,6 +51,7 @@ khong sua ma nguon noi bo cua `ultralytics`.
 | `scripts/run_pipeline.py` | Pipeline day du, co co `--motion-memory` cho ablation |
 | `scripts/generate_occlusion_scenarios.py` | Sinh kich ban occlusion cho mot nhom (dev/heldout) |
 | `scripts/run_occlusion_ablation.py` | Chay ablation co/khong Motion Memory tren mot nhom kich ban, roi danh gia/gop/so sanh |
+| `scripts/tune_motion_memory.py` | Tune Motion Memory tren dev: replay song song log tracker cua ablation v2_001 (CPU), chon cau hinh theo quy tac |
 | `scripts/prepare_visdrone.py` | Chuyen VisDrone2019-MOT sang dinh dang Ultralytics (giai doan A, 10 class) |
 | `scripts/generate_masks.py` | Sinh mask polygon tu box bang SAM, fallback hinh chu nhat khi mask lech |
 | `scripts/check_env.py` | Kiem tra Python, version package, CUDA, schema BoT-SORT, weight |
@@ -169,6 +173,19 @@ python scripts/run_occlusion_ablation.py --group dev --tag v2_001 \
 # metrics.json gop, ablation_vs_*.json. Gitignore: anh/manifest kich ban,
 # data/occlusion_screening/ (clip + log track screening), experiments/**/scenarios/.
 # Nhom heldout CHI chay sau khi da chot tham so Motion Memory tren dev.
+
+# 4. Tune Motion Memory tren dev (CPU, chi replay log tracker cua v2_001 - khong
+#    YOLO). Quy tac dang ky truoc: configs/motion_memory_tuning_dev.yaml.
+python scripts/tune_motion_memory.py --round 1 --dry-run
+python scripts/tune_motion_memory.py --round 1 --jobs 16
+python scripts/tune_motion_memory.py --round 2 --jobs 16   # tu choi neu vong 1 chua du
+python scripts/tune_motion_memory.py --select              # chi ghi configs/motion_memory_tuned.yaml khi chon duoc
+# -> experiments/<detector>_botsort_mm_occl_dev_tune_<id cau hinh>/ (moi cau hinh, ke ca cau hinh xau)
+#    + experiments/motion_memory_tuning_dev/{config.yaml,summary.json,mm_configs/}
+# Ket luan co the la "giu cau hinh mac dinh" - ghi ro trong summary.json.
+# 5. Heldout (MOT lan, sau khi chot): run_occlusion_ablation.py --group heldout ...
+#    --motion-memory-config configs/motion_memory_tuned.yaml (neu tuning chon duoc;
+#    neu khong, de mac dinh configs/motion_memory.yaml).
 
 # imgsz: --imgsz > detector.imgsz trong experiments/<id>/config.yaml >
 # run_context.json canh weights > configs/train_config.yaml. Gia tri da dung
