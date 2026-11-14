@@ -46,6 +46,23 @@ Kich ban v1 (lan chay thu "timing"): --metrics-config configs/occlusion_metrics.
 Cot Motion Memory phu (--extra-motion-memory-config ten=file, lap lai duoc): moi cot la
 mot experiment <detector>_botsort_mm_<ten>_occl_<group>_<tag> hau ky tren CUNG log
 tracker (replay), so sanh rieng voi baseline. Khong co co nay -> hanh vi/ten nhu cu.
+
+Nhom heldout (hoac khi co --report-plan): GUARD theo ke hoach khai bao truoc
+(configs/heldout_report_plan.yaml) - truoc khi ghi bat ky file nao:
+    - bat buoc --report-plan; plan dung version, group; sha256 (bo CR) cua MOI file plan
+      tham chieu khop; --motion-memory-config / cac cot phu / --metrics-config dung file va
+      dung ten cot cua plan; config_sha256 kich ban trong index khop plan;
+    - weights moi detector trung weights_sha256 trong screening cua cac nhom plan yeu cau;
+    - cay lam viec SACH (src/utils/run_context.py CLEAN_TREE_DEFINITION) va moi file plan
+      tham chieu da track trong HEAD;
+    - khong --limit-scenarios / --allow-partial-index;
+    - da co metrics.json GOP o bat ky cot nao -> tu choi (chay lai: tag moi +
+      --heldout-rerun-note); co ket qua dang do (log/metrics tung kich ban) -> chi chay tiep
+      voi --resume-incomplete (ghi vao config.yaml, khoa heldout_resumes);
+    - tag khac plan -> bat buoc --heldout-rerun-note.
+config.yaml moi experiment ghi khoi `heldout` (plan + sha256, cot, vai tro, commit git,
+dinh nghia cay sach, weights sha256); experiment log tracker ghi them moi truong
+(Python, platform, CUDA/GPU, version package) cua may chay src.track.
 Metrics v2 tren kich ban v1 (va nguoc lai) -> tu choi.
 
 Vi du (tren cloud)::
@@ -184,6 +201,12 @@ def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
                         help="Cho phep index danh dau partial (smoke test, KHONG phai benchmark)")
     parser.add_argument("--limit-scenarios", type=int, default=None, metavar="N",
                         help="Chi chay N kich ban dau cua index (do thoi gian; KHONG phai benchmark)")
+    parser.add_argument("--report-plan", type=Path, default=None,
+                        help="Ke hoach heldout khai bao truoc (bat buoc voi --group heldout)")
+    parser.add_argument("--resume-incomplete", action="store_true",
+                        help="Heldout: chay tiep lan chay dang do (CHUA co metrics gop); ghi vao config.yaml")
+    parser.add_argument("--heldout-rerun-note", default=None,
+                        help="Heldout: ly do chay lai voi tag moi (bat buoc khi tag khac plan); ghi vao config.yaml")
     parser.add_argument("--dry-run", action="store_true",
                         help="Chi in lenh + so kich ban/so lan goi du kien, khong chay, khong ghi file")
     args = parser.parse_args(argv)
@@ -298,6 +321,9 @@ def tracks_config(detector: str, weights: str, args: argparse.Namespace, index_p
     }
 
 
+RESUMES_KEY = "heldout_resumes"   # nhat ky resume heldout - khong tinh vao so sanh cau hinh
+
+
 def ensure_experiment_config(exp_dir: Path, config: dict) -> None:
     """Ghi config.yaml cua experiment; da co ma khac -> tu choi (khong tron cau hinh)."""
     import yaml
@@ -305,6 +331,7 @@ def ensure_experiment_config(exp_dir: Path, config: dict) -> None:
     path = exp_dir / "config.yaml"
     if path.is_file():
         existing = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+        existing.pop(RESUMES_KEY, None)
         if existing != config:
             raise ValueError(
                 f"{path} da ton tai voi cau hinh khac - dung --tag moi thay vi tron hai cau hinh"
@@ -316,6 +343,144 @@ def ensure_experiment_config(exp_dir: Path, config: dict) -> None:
         + yaml.safe_dump(config, sort_keys=False, allow_unicode=True),
         encoding="utf-8",
     )
+
+
+def record_resume(exp_dir: Path, entry: dict) -> None:
+    """Them mot dong vao khoa heldout_resumes cua config.yaml (giu nguyen phan con lai)."""
+    import yaml
+
+    path = exp_dir / "config.yaml"
+    data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    data.setdefault(RESUMES_KEY, []).append(entry)
+    path.write_text(
+        "# Sinh boi scripts/run_occlusion_ablation.py - khong sua sau khi da co ket qua.\n"
+        + yaml.safe_dump(data, sort_keys=False, allow_unicode=True),
+        encoding="utf-8",
+    )
+
+
+def _repo_file(value) -> Path:
+    path = Path(value)
+    return (path if path.is_absolute() else REPO_ROOT / path).resolve()
+
+
+def _rel_to_repo(path: Path) -> str:
+    try:
+        return path.resolve().relative_to(REPO_ROOT.resolve()).as_posix()
+    except ValueError:
+        return str(path)
+
+
+def check_heldout(args: argparse.Namespace, index: dict, detectors: list) -> dict:
+    """Guard heldout theo ke hoach khai bao truoc. Tra ve khoi `heldout` cho config.yaml."""
+    import yaml
+
+    from src.heldout_plan import HeldoutPlan
+    from src.occlusion_scenarios import config_sha256, file_sha256
+    from src.utils import run_context as rc
+
+    if args.report_plan is None:
+        raise ValueError(f"Nhom {args.group}: bat buoc --report-plan (ke hoach heldout khai bao truoc)")
+    raw = Path(args.report_plan).read_bytes()
+    plan = HeldoutPlan.from_mapping(yaml.safe_load(raw.decode("utf-8")) or {})
+    plan_sha = config_sha256(raw)
+    problems: list[str] = []
+    if plan.group != args.group:
+        problems.append(f"plan group={plan.group} khac --group {args.group}")
+    if args.limit_scenarios is not None or args.allow_partial_index:
+        problems.append("heldout khong dung --limit-scenarios / --allow-partial-index (chay dung mot lan, du)")
+    names = [n for n, _ in args.detector]
+    if set(names) != set(plan.detectors):
+        problems.append(f"detector {sorted(names)} khac plan {sorted(plan.detectors)}")
+    for path, sha in plan.referenced_files().items():
+        f = _repo_file(path)
+        if not f.is_file():
+            problems.append(f"thieu file plan tham chieu: {path}")
+        elif config_sha256(f.read_bytes()) != sha:
+            problems.append(f"sha256 cua {path} khac plan (file da doi sau khi khai bao?)")
+    if _repo_file(args.motion_memory_config) != _repo_file(plan.mm_default.config):
+        problems.append(f"--motion-memory-config {args.motion_memory_config} khac cot {plan.mm_default.name} "
+                        f"({plan.mm_default.config})")
+    given = {n: p for n, p in args.extra_motion_memory_config}
+    if set(given) != set(plan.extras):
+        problems.append(f"cot phu {sorted(given)} khac plan {sorted(plan.extras)} (--extra-motion-memory-config)")
+    for name, col in plan.extras.items():
+        if name in given and _repo_file(given[name]) != _repo_file(col.config):
+            problems.append(f"cot phu {name}: {given[name]} khac plan ({col.config})")
+    if _repo_file(args.metrics_config) != _repo_file(plan.metrics_config["path"]):
+        problems.append(f"--metrics-config {args.metrics_config} khac plan ({plan.metrics_config['path']})")
+    if index.get("config_sha256") != plan.scenario_config["sha256"]:
+        problems.append("config_sha256 cua index kich ban khac scenario_config cua plan")
+    weights_sha = {}
+    for det, weights in args.detector:
+        if not Path(weights).is_file():
+            problems.append(f"khong thay weights {weights}")
+            continue
+        weights_sha[det] = file_sha256(weights)
+        for grp in plan.weights_must_match:
+            idx_path = args.scenario_root / grp / "index.json"
+            if not idx_path.is_file():
+                problems.append(f"khong thay {idx_path} (can de doi chieu weights voi screening {grp})")
+                continue
+            rec = ((json.loads(idx_path.read_text(encoding="utf-8")).get("screening") or {})
+                   .get("detectors") or {}).get(det) or {}
+            if rec.get("weights_sha256") != weights_sha[det]:
+                problems.append(f"weights {det} khac weights da dung khi screening {grp}")
+    changes = rc.git_tracked_changes(REPO_ROOT)
+    plan_rel = _rel_to_repo(Path(args.report_plan))
+    untracked = rc.git_untracked_paths([plan_rel, *plan.referenced_files()], REPO_ROOT)
+    if changes is None or untracked is None:
+        problems.append("khong doc duoc trang thai git (can repo git de chay heldout)")
+    else:
+        if changes:
+            problems.append(f"cay lam viec KHONG sach ({len(changes)} file da track bi doi, vd {changes[0]!r}); "
+                            + rc.CLEAN_TREE_DEFINITION)
+        if untracked:
+            problems.append(f"file plan tham chieu chua commit: {untracked}")
+    if args.tag != plan.tag and not args.heldout_rerun_note:
+        problems.append(f"--tag {args.tag} khac tag cua plan ({plan.tag}): lan chay moi phai co --heldout-rerun-note")
+    dirs = [d for _, _, tracks_dir, specs in detectors for d in [tracks_dir] + [s.exp_dir for s in specs]]
+    aggregated = [d.name for d in dirs if (d / "metrics.json").is_file()]
+    started = [d.name for d in dirs if (d / "scenarios").is_dir() and any((d / "scenarios").iterdir())]
+    if aggregated:
+        problems.append(f"da co metrics.json gop ({aggregated[:3]}) - heldout chi chay mot lan; chay lai: tag moi "
+                        "+ --heldout-rerun-note")
+    elif started and not args.resume_incomplete:
+        problems.append(f"da co ket qua dang do ({started[:3]}): chay tiep CHI voi --resume-incomplete")
+    elif args.resume_incomplete and not started:
+        problems.append("--resume-incomplete nhung chua co ket qua dang do nao")
+    if problems:
+        raise ValueError("Guard heldout tu choi:\n  " + "\n  ".join(problems))
+    commit = (rc.git_info(REPO_ROOT) or {}).get("commit")
+    return {
+        "plan": {"path": plan_rel, "sha256": plan_sha, "version": plan.version},
+        "plan_tag": plan.tag,
+        "rerun_note": args.heldout_rerun_note,
+        "git": {"commit": commit, "clean": True, "clean_definition": rc.CLEAN_TREE_DEFINITION},
+        "weights_sha256": weights_sha,
+        "_plan": plan,
+    }
+
+
+def heldout_column(plan, spec: RunSpec) -> tuple[str, str]:
+    if not spec.motion_memory:
+        col = next(c for c in plan.columns if c.kind == "baseline")
+    elif spec.mm_name:
+        col = plan.extras[spec.mm_name]
+    else:
+        col = plan.mm_default
+    return col.name, col.role
+
+
+def environment_info() -> dict:
+    """Moi truong may chay src.track (muc 14): Python, platform, CUDA/GPU, version package."""
+    import platform
+
+    from src.utils.run_context import hardware_info, package_versions
+
+    env = {"python": sys.version.split()[0], "platform": platform.platform(),
+           "hardware": hardware_info(), "versions": package_versions()}
+    return json.loads(json.dumps(env, default=str))   # vd torch.__version__ (lop con str) -> str thuong
 
 
 def tracker_command(weights: str, scen_dir: Path, tracks_log: Path, args: argparse.Namespace) -> list[str]:
@@ -451,12 +616,56 @@ def run_ablation(args: argparse.Namespace, runner: Runner = default_runner) -> R
             specs.append(RunSpec(name, weights, True, exp, args.output_root / exp, mm_config=path, mm_name=extra))
         tracks_dir = args.output_root / tracks_experiment_id(name, args.group, args.tag)
         detectors.append((name, weights, tracks_dir, specs))
+    heldout = None
+    if args.group == "heldout" or getattr(args, "report_plan", None) is not None:
+        heldout = check_heldout(args, index, detectors)
+        print(f"Guard heldout: OK (plan {heldout['plan']['path']} sha256 {heldout['plan']['sha256'][:12]}..., "
+              f"commit {str(heldout['git']['commit'])[:10]})")
     if not args.dry_run:
+        env = environment_info() if heldout is not None else None
+        section = {k: v for k, v in (heldout or {}).items() if k != "_plan"}
         for name, weights, tracks_dir, specs in detectors:
-            ensure_experiment_config(tracks_dir, tracks_config(name, weights, args, index_path, index))
+            conf = tracks_config(name, weights, args, index_path, index)
+            if heldout is not None:
+                conf["heldout"] = {**section, "environment": env,
+                                   "note": "src.track chay tren may nay (GPU); replay MM chi dung CPU"}
+            ensure_experiment_config(tracks_dir, conf)
             for spec in specs:
-                ensure_experiment_config(spec.exp_dir, experiment_config(spec, args, index_path, index, metrics))
+                conf = experiment_config(spec, args, index_path, index, metrics)
+                if heldout is not None:
+                    col, role = heldout_column(heldout["_plan"], spec)
+                    conf["heldout"] = {**section, "column": col, "role": role}
+                ensure_experiment_config(spec.exp_dir, conf)
+        if heldout is not None and args.resume_incomplete:
+            from datetime import datetime, timezone
 
+            entry = {"at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+                     "git_commit": heldout["git"]["commit"]}
+            for _, _, tracks_dir, specs in detectors:
+                for d in [tracks_dir] + [s.exp_dir for s in specs]:
+                    record_resume(d, entry)
+
+    def finish(specs: list[RunSpec], complete: dict[str, bool]) -> None:
+        for spec in specs:
+            if not complete[spec.exp_id]:
+                continue
+            if call(aggregate_command(spec.exp_dir, index_path, incomplete_ok)) == 0:
+                report.aggregated.append(spec.exp_id)
+            else:
+                report.failed.append(f"{spec.exp_id} (aggregate loi)")
+        base = specs[0].exp_id
+        for mem_spec in specs[1:]:   # moi cot MM (mac dinh + phu) so voi baseline
+            mem = mem_spec.exp_id
+            if base not in report.aggregated or mem not in report.aggregated:
+                continue
+            out = args.output_root / mem / f"ablation_vs_{base}.json"
+            cmd = compare_command(args.output_root / base, args.output_root / mem, out)
+            if call(cmd) == 0:
+                report.compared.append(f"{base} vs {mem}")
+            else:
+                report.failed.append(f"{base} vs {mem} (compare loi)")
+
+    finished: list[tuple[list[RunSpec], dict[str, bool]]] = []
     for name, weights, tracks_dir, specs in detectors:
         complete = {spec.exp_id: True for spec in specs}
         for scen_name in scenarios:
@@ -508,26 +717,19 @@ def run_ablation(args: argparse.Namespace, runner: Runner = default_runner) -> R
                 getattr(report, status).append(label)
                 if status == "failed":
                     complete[spec.exp_id] = False
+        finished.append((specs, complete))
+        if heldout is None:
+            finish(specs, complete)
 
-        for spec in specs:
-            if not complete[spec.exp_id]:
-                continue
-            if call(aggregate_command(spec.exp_dir, index_path, incomplete_ok)) == 0:
-                report.aggregated.append(spec.exp_id)
-            else:
-                report.failed.append(f"{spec.exp_id} (aggregate loi)")
-
-        base = specs[0].exp_id
-        for mem_spec in specs[1:]:   # moi cot MM (mac dinh + phu) so voi baseline
-            mem = mem_spec.exp_id
-            if base not in report.aggregated or mem not in report.aggregated:
-                continue
-            out = args.output_root / mem / f"ablation_vs_{base}.json"
-            cmd = compare_command(args.output_root / base, args.output_root / mem, out)
-            if call(cmd) == 0:
-                report.compared.append(f"{base} vs {mem}")
-            else:
-                report.failed.append(f"{base} vs {mem} (compare loi)")
+    if heldout is not None:
+        # Heldout: chi gop khi MOI detector x MOI cot da du kich ban -> "da co metrics gop" <=>
+        # lan chay da xong (guard: resume chi khi chua co metrics gop).
+        if all(all(c.values()) for _, c in finished):
+            for specs, complete in finished:
+                finish(specs, complete)
+        else:
+            report.failed.append("heldout: chua du kich ban o moi detector/cot - KHONG gop; chay tiep voi "
+                                 "--resume-incomplete")
     return report
 
 
