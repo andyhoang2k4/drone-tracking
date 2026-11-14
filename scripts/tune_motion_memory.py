@@ -78,7 +78,8 @@ DEFAULT_TAG = "tune"
 SUMMARY_KIND = "motion_memory_tuning"
 THREAD_ENV = ("OMP_NUM_THREADS", "MKL_NUM_THREADS", "OPENBLAS_NUM_THREADS", "NUMEXPR_NUM_THREADS")
 
-Runner = Callable[[list[str]], int]
+# Runner tra ve ma thoat, hoac (ma thoat, output) - subprocess_runner tra output de bao loi day du.
+Runner = Callable[[list[str]], Any]
 
 
 def default_jobs() -> int:
@@ -91,14 +92,24 @@ def subprocess_env() -> dict[str, str]:
     return {**os.environ, **{k: "1" for k in THREAD_ENV}, "CUDA_VISIBLE_DEVICES": ""}
 
 
-def subprocess_runner(cmd: list[str]) -> int:
-    """Chay mot lenh; output giu lai, chi in khi loi (tranh tron output song song)."""
+def subprocess_runner(cmd: list[str]) -> tuple[int, str]:
+    """Chay mot lenh (cwd = goc repo); tra ve (ma thoat, stdout + stderr) de bao loi day du."""
     env = subprocess_env()
     proc = subprocess.run(cmd, cwd=str(REPO_ROOT), env=env, capture_output=True, text=True)
-    if proc.returncode != 0:
-        tail = (proc.stderr or proc.stdout or "").strip().splitlines()[-5:]
-        print(f"LOI ({proc.returncode}): {' '.join(cmd[:4])} ...\n    " + "\n    ".join(tail), flush=True)
-    return proc.returncode
+    return proc.returncode, (proc.stdout or "") + (proc.stderr or "")
+
+
+def run_cmd(runner: "Runner", cmd: list[str]) -> tuple[int, str]:
+    """Runner tra ve ma thoat (int) hoac (ma thoat, output)."""
+    result = runner(cmd)
+    if isinstance(result, tuple):
+        return int(result[0]), str(result[1] or "")
+    return int(result), ""
+
+
+def output_tail(output: str, lines: int = 60) -> str:
+    rows = output.strip().splitlines()
+    return "\n".join(("    " + r) for r in rows[-lines:]) if rows else "    (khong co output)"
 
 
 def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
@@ -438,6 +449,51 @@ class Report:
     wall_seconds: float = 0.0
 
 
+def preflight_static(ctx: Context, configs: list[dict]) -> None:
+    """Moi lenh replay cua vong phai qua dung kiem tra cua run_pipeline (parse_args +
+    apply_replay_meta) voi meta cua log - khong chay gi, chay ca khi --dry-run.
+    Giua cac cau hinh chi --motion-memory-config khac nhau (khong bi doi chieu voi
+    meta) nen kiem tren cau hinh dau cua vong."""
+    from scripts.run_pipeline import ReplayError, apply_replay_meta
+    from scripts.run_pipeline import parse_args as pipeline_parse_args
+
+    cfg = configs[0]
+    problems = []
+    for det in ctx.rules.detectors:
+        for scen in ctx.scenarios:
+            cmd = unit_pipeline_command(ctx, det, cfg["id"], scen, ctx.mm_config_path(cfg["id"]))
+            try:
+                apply_replay_meta(pipeline_parse_args(cmd[2:]), dict(ctx.replay_inputs(det, scen)["meta"]))
+            except (ReplayError, SystemExit) as exc:
+                problems.append((det, scen, cmd, str(exc)))
+    if problems:
+        det, scen, cmd, msg = problems[0]
+        raise SystemExit(
+            f"Pre-flight: {len(problems)}/{len(ctx.rules.detectors) * len(ctx.scenarios)} lenh replay KHONG khop "
+            f"meta cua log tracker - khong chay.\nVi du {det}/{scen}:\n{msg}\nLenh: {' '.join(cmd)}"
+        )
+
+
+def preflight_live(ctx: Context, configs: list[dict], runner: Runner) -> None:
+    """Chay THAT dung mot lenh replay (kich ban dau, cau hinh dau cua vong) cho moi detector,
+    ghi vao thu muc tam (khong dung toi experiment). Loi -> dung ngay, in day du."""
+    import tempfile
+
+    cfg, scen = configs[0], ctx.scenarios[0]
+    with tempfile.TemporaryDirectory(prefix="tune_preflight_") as tmp:
+        for det in ctx.rules.detectors:
+            cmd = unit_pipeline_command(ctx, det, cfg["id"], scen, ctx.mm_config_path(cfg["id"]),
+                                        exp_dir=Path(tmp) / det)
+            start = time.perf_counter()
+            code, output = run_cmd(runner, cmd)
+            if code != 0:
+                raise SystemExit(
+                    f"Pre-flight THAT BAI ({det}, {cfg['id']}, {scen}): run_pipeline replay thoat ma {code} - "
+                    f"dung truoc khi chay ca vong.\nLenh: {' '.join(cmd)}\nOutput:\n{output_tail(output)}"
+                )
+            print(f"Pre-flight {det}: replay {scen} OK ({time.perf_counter() - start:.1f} s)", flush=True)
+
+
 def run_configs(ctx: Context, configs: list[dict], runner: Runner) -> Report:
     args, report, lock = ctx.args, Report(), threading.Lock()
     group_dir = args.scenario_root / ctx.rules.group
@@ -448,9 +504,11 @@ def run_configs(ctx: Context, configs: list[dict], runner: Runner) -> Report:
         if args.dry_run:
             return 0
         start = time.perf_counter()
-        code = runner(cmd)
+        code, output = run_cmd(runner, cmd)
         with lock:
             report.timings.setdefault(abl.command_kind(cmd), []).append(time.perf_counter() - start)
+        if code != 0:
+            print(f"LOI ({code}): {' '.join(cmd[:4])} ...\n{output_tail(output, 10)}", flush=True)
         return code
 
     prepared = []
@@ -462,6 +520,10 @@ def run_configs(ctx: Context, configs: list[dict], runner: Runner) -> Report:
             if not args.dry_run:
                 abl.ensure_experiment_config(spec.exp_dir, experiment_config(ctx, spec, cfg, mm_path))
             prepared.append((cfg, det, spec, ns))
+
+    preflight_static(ctx, configs)
+    if not args.dry_run:
+        preflight_live(ctx, configs, runner)
 
     units = []
     for cfg, det, spec, ns in prepared:

@@ -26,6 +26,7 @@ from tests.test_run_occlusion_ablation import V2_CASES, FakeRunner, fake_tracks_
 
 N_R1 = 8          # default + 7 cau hinh
 DETS = ("yolo11", "yolo26")
+PREFLIGHT = len(DETS)   # moi vong: 1 lenh replay that moi detector truoc khi chay
 
 
 @pytest.fixture
@@ -121,7 +122,8 @@ def test_full_flow_round1_resume_round2_select(tune_env, capsys):
 
     runner = FakeRunner()                                     # resume: khong replay lai
     assert tune.main(base + ["--round", "1", "--jobs", "2"], runner) == 0
-    assert runner.count("pipeline") == 0 and runner.count("occlusion") == 0
+    # resume: chi pre-flight (1 replay that moi detector, thu muc tam), khong replay lai kich ban
+    assert runner.count("pipeline") == PREFLIGHT and runner.count("occlusion") == 0
 
     capsys.readouterr()
     assert tune.main(base + ["--round", "2"], FakeRunner()) == 0
@@ -149,7 +151,7 @@ def test_round2_runs_combined_and_select_writes_tuned_only_when_chosen(tune_env,
     monkeypatch.setattr(mt, "round1_winners", fake_winners)
     runner = FakeRunner()
     assert tune.main(base + ["--round", "2"], runner) == 0
-    assert runner.count("pipeline") == len(DETS) * len(V2_CASES)
+    assert runner.count("pipeline") == len(DETS) * len(V2_CASES) + PREFLIGHT
     s = summary(tmp)
     assert s["round2"]["status"] == "complete"
     assert s["round2"]["config"]["overrides"] == {"velocity_decay": 0.9, "match_iou": 0.4}
@@ -197,7 +199,7 @@ def test_limit_scenarios_is_partial_separate_and_cannot_select(tune_env, capsys)
     runner = FakeRunner()
     assert tune.main(base + ["--round", "1", "--limit-scenarios", "1"], runner) == 0
     assert runner.count("compare") == 0                      # khong cung tap kich ban voi baseline -> khong so sanh
-    assert runner.count("pipeline") == N_R1 * len(DETS)
+    assert runner.count("pipeline") == N_R1 * len(DETS) + PREFLIGHT
     s = summary(tmp, "motion_memory_tuning_dev_tune_limit1")
     assert s["partial"] is True and s["round1"]["status"] == "incomplete"
     assert s["selection"]["status"] == "not_available" and s["conclusion"] is None

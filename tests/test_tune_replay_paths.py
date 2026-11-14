@@ -129,3 +129,49 @@ def test_meta_pointing_elsewhere_is_refused(monkeypatch, repo_tmp, tmp_path):
             "--output-root", str(src["exps"]), "--dry-run"]
     with pytest.raises(SystemExit, match="khong tro toi"):
         tune.build_context(tune.parse_args(argv))
+
+
+# ---------------- pre-flight ----------------
+
+LONG_ERROR = "\n".join([f"dong traceback {i}" for i in range(12)]
+                       + ["scripts.run_pipeline.ReplayError: Log track khong khop tham so:",
+                          "  source: CLI '/abs/x/images' khac meta 'x/images'"])
+
+
+class RecordingRunner:
+    def __init__(self, result):
+        self.result, self.calls = result, []
+
+    def __call__(self, cmd):
+        self.calls.append(cmd)
+        return self.result(cmd) if callable(self.result) else self.result
+
+
+def test_preflight_live_failure_stops_before_round_with_full_output(monkeypatch, repo_tmp, tmp_path):
+    src = build_source(monkeypatch, repo_tmp, tmp_path, "relative")
+    runner = RecordingRunner((1, LONG_ERROR))
+    argv = ["--round", "1", "--scenario-root", _arg(src["scn"], "absolute"), "--output-root", str(src["exps"])]
+    with pytest.raises(SystemExit) as exc:
+        tune.main(argv, runner)
+    msg = str(exc.value)
+    assert "Pre-flight THAT BAI (yolo11, default" in msg
+    assert "dong traceback 0" in msg and "source: CLI '/abs/x/images'" in msg      # day du, khong chi 5 dong
+    assert "--replay-tracks" in msg                                                 # vi du lenh
+    assert len(runner.calls) == 1                                                   # dung ngay o detector dau
+    assert not list(src["exps"].glob("*_tune_default/scenarios"))                   # chua chay kich ban nao
+
+
+def test_preflight_static_mismatch_refused_even_in_dry_run(monkeypatch, repo_tmp, tmp_path):
+    src = build_source(monkeypatch, repo_tmp, tmp_path, "relative")
+    meta_path = (src["exps"] / "yolo26_botsort_tracks_occl_dev_v2_001" / "scenarios" / src["names"][1]
+                 / "logs" / "tracks.meta.json")
+    meta = json.loads(meta_path.read_text(encoding="utf-8"))
+    meta["tracker"] = "configs/botsort_khac.yaml"                   # run_pipeline se tu choi (tracker khac meta)
+    meta_path.write_text(json.dumps(meta), encoding="utf-8")
+    runner = RecordingRunner(0)
+    for extra in (["--dry-run"], []):
+        with pytest.raises(SystemExit, match="1/6 lenh replay KHONG khop meta") as exc:
+            tune.main(["--round", "1", "--scenario-root", _arg(src["scn"], "relative"),
+                       "--output-root", str(src["exps"])] + extra, runner)
+        assert "tracker" in str(exc.value) and "yolo26/" + src["names"][1] in str(exc.value)
+    assert runner.calls == []
