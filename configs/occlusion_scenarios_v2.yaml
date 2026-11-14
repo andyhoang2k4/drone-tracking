@@ -1,0 +1,103 @@
+# Kich ban occlusion nhan tao co ground truth - VERSION 2 (roadmap buoc 4).
+# Doc boi src/occlusion_scenarios.py (scripts/generate_occlusion_scenarios.py)
+# va src/occlusion_screening.py (scripts/screen_occlusion_targets.py).
+#
+# Ban v1 (configs/occlusion_scenarios.yaml) GIU NGUYEN de truy vet lan chay thu
+# "timing" (2026-11-13). v2 ghi ra thu muc rieng (output_root) -> scenario /
+# manifest / index v1 va v2 khong ghi de lan nhau.
+#
+# CO DINH TRUOC KHI CO BAT KY SO LIEU THAT NAO CUA MOTION MEMORY TREN DU LIEU
+# OCCLUSION (quyet dinh 2026-11-14). Doi quy tac sau khi da xem ket qua ->
+# tang `version`, tao experiment moi, KHONG sua tai cho (CLAUDE.md muc 13).
+#
+# KHAC v1 (ly do: lan chay thu cho thay quy tac chi dua tren GT chon ca muc tieu
+# ma detector khong thay -> "chua khoa", lam loang metrics):
+#   1. Moi sequence lay `candidates_per_sequence` ung vien (thu tu tron co seed)
+#      trong cac muc tieu thoa target_rules (GIONG v1).
+#   2. SCREENING (GPU, scripts/screen_occlusion_targets.py): voi moi ung vien,
+#      chay YOLO + BoT-SORT tren dung pre_occlusion_frames frame SACH truoc khi
+#      che (= frame 0..pre-1 cua moi kich ban cua muc tieu do) va ap DUNG luat
+#      chon muc tieu that cua pipeline (GtTargetSelector) + dieu kien target_lock.
+#      Ung vien DAT khi va chi khi MOI detector trong required_detectors khoa
+#      duoc no -> so sanh detector tren cung tap muc tieu.
+#   3. Moi sequence giu toi da `targets_per_sequence` ung vien DAT dau tien theo
+#      thu tu co seed; chi sinh kich ban cho cac muc tieu do.
+#   4. Cung quy tac cho dev va heldout. Heldout chi chay screening (detector +
+#      tracker tren frame sach, khong Motion Memory, khong kich ban che) va sinh
+#      kich ban - khong tinh chinh gi tren heldout.
+#
+# THIEN LECH CHON MAU (ghi trong bao cao): tap muc tieu nghieng ve vat de thay
+# voi ca hai detector (lon, tuong phan cao, lop pho bien). screening.json ghi
+# phan bo lop / kich thuoc cua ung vien so voi muc tieu dat va ti le dat.
+#
+# HAN CHE (nhu v1): vat che nhan tao KHONG giong che khuat that.
+
+version: 2
+seed: 20261113
+
+raw_root: data/raw/VisDrone2019-MOT
+dataset_config: configs/dataset_visdrone.yaml    # category_map: category VisDrone -> class 0..9
+output_root: data/occlusion_test_scenarios/v2    # KHAC v1 (data/occlusion_test_scenarios)
+
+# Nhom theo SEQUENCE, hai split chinh thuc khac nhau (generator kiem tra khong
+# trung). Du lieu train KHONG dung de chon muc tieu (detector da train tren do).
+#   dev     : DUOC dung de tinh chinh tham so Motion Memory.
+#   heldout : KHONG tinh chinh; chi chay mot lan sau khi chot tham so tren dev.
+groups:
+  dev:
+    split_dir: VisDrone2019-MOT-val
+  heldout:
+    split_dir: VisDrone2019-MOT-test-dev
+
+# Dieu kien GT cua muc tieu tren TOAN BO cua so (GIONG v1, xem
+# configs/occlusion_scenarios.yaml).
+target_rules:
+  classes: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+  min_box_side_px: 16
+  max_gt_truncation: 0
+  max_gt_occlusion: 1
+  max_ignore_ioa: 0.0
+  pre_occlusion_frames: 30
+  post_occlusion_frames: 60
+  candidates_per_sequence: 12   # ung vien dua vao screening (it hon neu sequence co it muc tieu hop le)
+  targets_per_sequence: 4       # giu toi da N ung vien DAT dau tien theo thu tu co seed
+
+# "Khoa duoc truoc khi che" (src/utils/gt_target.py evaluate_target_lock), dung
+# chung cho screening, run_pipeline (--gt-match-iou / --gt-max-search-frames lay
+# tu manifest) va danh gia v2 (configs/occlusion_metrics_v2.yaml):
+#   (1) GtTargetSelector chon duoc track trong max_search_frames frame dau
+#       (KHONG xet class; class track da chon chi ghi lai);
+#   (2) track da chon co IoU >= lock_iou voi GT o MOI frame trong
+#       lock_confirm_frames frame lien truoc khi che.
+target_lock:
+  match_iou: 0.5
+  max_search_frames: 10
+  lock_confirm_frames: 3
+  lock_iou: 0.5
+  required_detectors: [yolo11, yolo26]
+
+screening:
+  # Clip 30 frame (hardlink) + log track cua screening; KHONG commit (.gitignore),
+  # sao luu cung kich ban. Ket qua gon: <output_root>/<group>/screening.json (commit).
+  work_root: data/occlusion_screening/v2
+  # Bien nhom kich thuoc (canh ngan bbox GT o frame cuoi truoc che, px) de bao
+  # cao phan bo ung vien vs muc tieu dat. Chi de bao cao, khong dung de loai.
+  size_bins_px: [16, 24, 32, 48, 64, 96]
+
+durations_frames: [5, 15, 30, 60]
+
+start_policy: seeded_shared
+
+occluders:
+  - {name: full_solid, coverage: full, texture: solid}
+  - {name: full_noise, coverage: full, texture: noise}
+  - {name: partial_solid, coverage: partial, texture: solid}
+  - {name: partial_noise, coverage: partial, texture: noise}
+occluder_params:
+  margin_ratio: 0.15
+  partial_fraction: 0.6
+  solid_color_bgr: [114, 114, 114]
+
+image:
+  format: jpg
+  jpeg_quality: 95

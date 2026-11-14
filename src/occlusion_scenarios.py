@@ -31,6 +31,7 @@ from pathlib import Path
 from typing import Any, Mapping, Optional, Sequence, Union
 
 from src.motion_memory import BBox
+from src.utils.gt_target import LockRule
 from src.utils.visdrone import (
     VisDroneBox,
     frame_index_from_path,
@@ -86,10 +87,20 @@ class ScenarioConfig:
     image_format: str
     jpeg_quality: int
     config_sha256: str = ""
+    # --- v2 (configs/occlusion_scenarios_v2.yaml); None/rong = hanh vi v1 ---
+    candidates_per_sequence: Optional[int] = None
+    target_lock: Optional[LockRule] = None
+    required_detectors: tuple[str, ...] = ()
+    screening_work_root: Optional[Path] = None
+    size_bins_px: tuple[float, ...] = ()
 
     @property
     def max_duration(self) -> int:
         return max(self.durations_frames)
+
+    @property
+    def uses_screening(self) -> bool:
+        return self.target_lock is not None
 
 
 def _resolve(repo_root: Path, value: PathLike) -> Path:
@@ -118,6 +129,23 @@ def load_scenario_config(path: PathLike, repo_root: Optional[PathLike] = None) -
         params = data["occluder_params"]
         image = data["image"]
         groups = {name: str(g["split_dir"]) for name, g in data["groups"].items()}
+        lock_data = data.get("target_lock")
+        screening = data.get("screening") or {}
+        v2: dict[str, Any] = {}
+        if lock_data is not None:
+            try:
+                rule = LockRule.from_mapping(lock_data)
+            except ValueError as exc:
+                raise ScenarioConfigError(f"{path}: {exc}") from exc
+            v2 = {
+                "candidates_per_sequence": int(rules["candidates_per_sequence"]),
+                "target_lock": rule,
+                "required_detectors": tuple(str(d) for d in lock_data["required_detectors"]),
+                "screening_work_root": _resolve(root, screening["work_root"]),
+                "size_bins_px": tuple(float(b) for b in screening.get("size_bins_px", [])),
+            }
+        elif "candidates_per_sequence" in rules or screening:
+            raise ScenarioConfigError(f"{path}: candidates_per_sequence/screening can khoi target_lock")
         cfg = ScenarioConfig(
             version=int(data["version"]),
             seed=int(data["seed"]),
@@ -144,6 +172,7 @@ def load_scenario_config(path: PathLike, repo_root: Optional[PathLike] = None) -
             image_format=str(image["format"]).lower(),
             jpeg_quality=int(image.get("jpeg_quality", 95)),
             config_sha256=config_sha256(raw_bytes),
+            **v2,
         )
     except (KeyError, TypeError) as exc:
         raise ScenarioConfigError(f"{path}: thieu/sai khoa config: {exc}") from exc
@@ -188,6 +217,21 @@ def _validate(cfg: ScenarioConfig, path: Path) -> None:
         fail("image.format chi ho tro jpg|png")
     if not 0 <= cfg.max_ignore_ioa <= 1:
         fail("max_ignore_ioa phai trong [0, 1]")
+    if cfg.uses_screening:
+        if cfg.version < 2:
+            fail("target_lock chi dung tu version 2 (giu nguyen hanh vi v1)")
+        if cfg.candidates_per_sequence is None or cfg.candidates_per_sequence < cfg.targets_per_sequence:
+            fail("candidates_per_sequence phai >= targets_per_sequence")
+        dets = cfg.required_detectors
+        if not dets or len(set(dets)) != len(dets):
+            fail("target_lock.required_detectors rong hoac trung ten")
+        assert cfg.target_lock is not None
+        if cfg.target_lock.lock_confirm_frames > cfg.pre_occlusion_frames:
+            fail("lock_confirm_frames phai <= pre_occlusion_frames")
+        if list(cfg.size_bins_px) != sorted(set(cfg.size_bins_px)):
+            fail("screening.size_bins_px phai tang dan, khong trung")
+        if cfg.output_root == cfg.screening_work_root:
+            fail("screening.work_root phai khac output_root")
 
 
 # ---------------- RNG xac dinh ----------------
@@ -290,24 +334,139 @@ class TargetPlan:
 
 
 def plan_sequence(data: SequenceData, cfg: ScenarioConfig) -> list[TargetPlan]:
-    """Chon muc tieu + vi tri bat dau che (xac dinh theo seed)."""
-    eligible: dict[int, list[int]] = {}
-    for tid in sorted(data.targets):
-        starts = valid_starts(valid_frames(data, tid, cfg), cfg, cfg.max_duration)
-        if starts:
-            eligible[tid] = starts
+    """v1: chon muc tieu + vi tri bat dau che (xac dinh theo seed), chi theo GT."""
+    eligible = _eligible_starts(data, cfg)
     if not eligible:
         return []
     ids = sorted(eligible)
     chosen = sorted(
         derived_rng(cfg.seed, data.name, "targets").sample(ids, min(cfg.targets_per_sequence, len(ids)))
     )
-    plans = []
-    for tid in chosen:
-        start = derived_rng(cfg.seed, data.name, tid, "start").choice(eligible[tid])
-        row = data.targets[tid][start]
-        plans.append(TargetPlan(data.name, tid, start, cfg.category_map[row.category], row.category))
-    return plans
+    return [_target_plan(data, cfg, tid, eligible[tid]) for tid in chosen]
+
+
+def _eligible_starts(data: SequenceData, cfg: ScenarioConfig) -> dict[int, list[int]]:
+    eligible: dict[int, list[int]] = {}
+    for tid in sorted(data.targets):
+        starts = valid_starts(valid_frames(data, tid, cfg), cfg, cfg.max_duration)
+        if starts:
+            eligible[tid] = starts
+    return eligible
+
+
+def _target_plan(data: SequenceData, cfg: ScenarioConfig, tid: int, starts: list[int]) -> TargetPlan:
+    """Vi tri bat dau che: cung cong thuc seed voi v1 (seed, sequence, target, 'start')."""
+    start = derived_rng(cfg.seed, data.name, tid, "start").choice(starts)
+    row = data.targets[tid][start]
+    return TargetPlan(data.name, tid, start, cfg.category_map[row.category], row.category)
+
+
+# ---------------- v2: ung vien + screening ----------------
+
+SCREENING_NAME = "screening.json"
+SCREENING_KIND = "occlusion_target_screening"
+
+
+def candidate_id(sequence: str, target_id: int) -> str:
+    return f"{sequence}__t{target_id}"
+
+
+def plan_candidates(data: SequenceData, cfg: ScenarioConfig) -> list[TargetPlan]:
+    """v2: ung vien screening cua mot sequence, THEO THU TU XEP HANG co seed.
+
+    Thu tu = tron (seed, sequence, 'candidates') tren ID muc tieu hop le da sap
+    xep; lay candidates_per_sequence dau. Vi tri che giong cong thuc v1.
+    """
+    if not cfg.uses_screening or cfg.candidates_per_sequence is None:
+        raise ScenarioConfigError("plan_candidates chi dung cho config co target_lock (v2)")
+    eligible = _eligible_starts(data, cfg)
+    order = sorted(eligible)
+    derived_rng(cfg.seed, data.name, "candidates").shuffle(order)
+    return [_target_plan(data, cfg, tid, eligible[tid]) for tid in order[: cfg.candidates_per_sequence]]
+
+
+def file_sha256(path: PathLike, chunk: int = 1 << 20) -> str:
+    """SHA-256 noi dung file (weights) - doc tung khoi, khong nap ca file."""
+    h = hashlib.sha256()
+    with open(path, "rb") as fh:
+        for block in iter(lambda: fh.read(chunk), b""):
+            h.update(block)
+    return h.hexdigest()
+
+
+class ScreeningError(ValueError):
+    """screening.json khong dung duoc de sinh kich ban v2."""
+
+
+def screening_path(cfg: ScenarioConfig, group: str) -> Path:
+    return cfg.output_root / group / SCREENING_NAME
+
+
+def candidate_eligible(entry: Mapping[str, Any], required: Sequence[str]) -> bool:
+    """Dat <=> MOI detector bat buoc deu 'locked'."""
+    dets = entry.get("detectors") or {}
+    return all((dets.get(name) or {}).get("status") == "locked" for name in required)
+
+
+def validate_screening(
+    screening: Mapping[str, Any],
+    cfg: ScenarioConfig,
+    group: str,
+    candidates: Mapping[str, Sequence[TargetPlan]],
+    weights_sha256: Mapping[str, str],
+) -> None:
+    """Tu choi screening partial / co loi / khac config_sha256 / khac danh sach
+    ung vien / khac weights sha256 (weights_sha256: tinh tu --detector luc sinh)."""
+    problems: list[str] = []
+    if screening.get("kind") != SCREENING_KIND:
+        problems.append(f"kind={screening.get('kind')!r}, mong doi {SCREENING_KIND!r}")
+    if screening.get("group") != group:
+        problems.append(f"group={screening.get('group')!r} khac {group!r}")
+    if screening.get("config_sha256") != cfg.config_sha256:
+        problems.append("config_sha256 khac config hien tai (config da doi sau screening?)")
+    if screening.get("partial"):
+        problems.append("screening la partial (--limit) - chay screening day du truoc")
+    if screening.get("errors"):
+        problems.append(f"screening co {len(screening['errors'])} loi (vd {screening['errors'][0]})")
+    dets = screening.get("detectors") or {}
+    if sorted(dets) != sorted(cfg.required_detectors):
+        problems.append(f"detector screening {sorted(dets)} khac required_detectors {sorted(cfg.required_detectors)}")
+    if sorted(weights_sha256) != sorted(cfg.required_detectors):
+        problems.append(f"can --detector cho dung {sorted(cfg.required_detectors)} de kiem tra weights sha256")
+    for name, sha in weights_sha256.items():
+        recorded = (dets.get(name) or {}).get("weights_sha256")
+        if recorded != sha:
+            problems.append(f"weights sha256 cua {name} khac screening ({str(sha)[:12]} vs {str(recorded)[:12]})")
+    expected = [
+        (candidate_id(p.sequence, p.target_id), p.occlusion_start)
+        for seq in sorted(candidates) for p in candidates[seq]
+    ]
+    entries = screening.get("candidates") or []
+    found = [(e.get("candidate_id"), e.get("occlusion_start")) for e in entries]
+    if found != expected:
+        problems.append(f"danh sach ung vien khac ke hoach hien tai ({len(found)} vs {len(expected)} ung vien)")
+    for e in entries:
+        if e.get("status") != "screened":
+            problems.append(f"{e.get('candidate_id')}: status={e.get('status')!r} (chua screening xong)")
+            break
+        if bool(e.get("eligible")) != candidate_eligible(e, cfg.required_detectors):
+            problems.append(f"{e.get('candidate_id')}: eligible khong khop trang thai detector")
+            break
+    if problems:
+        raise ScreeningError("screening.json khong dung duoc:\n  " + "\n  ".join(problems))
+
+
+def select_screened_targets(
+    candidates: Sequence[TargetPlan],
+    screening_by_id: Mapping[str, Mapping[str, Any]],
+    cfg: ScenarioConfig,
+) -> list[TargetPlan]:
+    """Toi da targets_per_sequence ung vien DAT dau tien theo thu tu xep hang."""
+    passed = [
+        p for p in candidates
+        if candidate_eligible(screening_by_id[candidate_id(p.sequence, p.target_id)], cfg.required_detectors)
+    ]
+    return passed[: cfg.targets_per_sequence]
 
 
 # ---------------- vat che ----------------
@@ -374,8 +533,12 @@ def write_scenario(
     cfg: ScenarioConfig,
     group: str,
     out_dir: Path,
+    extra_manifest: Optional[Mapping[str, Any]] = None,
 ) -> dict[str, Any]:
-    """Ghi mot kich ban ra out_dir (phai chua ton tai). Tra ve manifest."""
+    """Ghi mot kich ban ra out_dir (phai chua ton tai). Tra ve manifest.
+
+    extra_manifest (v2): them target_lock + nguon goc screening vao manifest.
+    """
     import cv2
     import numpy as np
 
@@ -453,6 +616,7 @@ def write_scenario(
         "seed": cfg.seed,
         "config_version": cfg.version,
         "config_sha256": cfg.config_sha256,
+        **dict(extra_manifest or {}),
     }
     (out_dir / MANIFEST_NAME).write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
     return manifest
@@ -485,21 +649,56 @@ def generate_group(
     overwrite: bool = False,
     max_sequences: Optional[int] = None,
     dry_run: bool = False,
+    screening_file: Optional[PathLike] = None,
+    weights_sha256: Optional[Mapping[str, str]] = None,
 ) -> dict[str, Any]:
     """Sinh moi kich ban cua mot nhom. Tra ve index (va ghi index.json neu khong dry_run).
 
     Kich ban da ton tai voi cung config_sha256 -> bo qua (khong ghi lai).
     Khac config -> loi, tru khi overwrite=True (xoa thu muc kich ban do roi sinh lai).
+
+    v2 (config co target_lock): bat buoc screening.json day du (mac dinh
+    <output_root>/<group>/screening.json) khop config_sha256, danh sach ung vien
+    va weights_sha256 ({detector: sha256} tinh tu weights luc sinh); chi sinh
+    kich ban cho toi da targets_per_sequence ung vien DAT dau tien moi sequence.
     """
     if group not in cfg.groups:
         raise ScenarioConfigError(f"Nhom {group!r} khong co trong config (co: {sorted(cfg.groups)})")
     check_group_disjoint(cfg)
     split_dir = cfg.raw_root / cfg.groups[group]
-    sequences = list_sequences(split_dir)
+    all_sequences = list_sequences(split_dir)
+    sequences = all_sequences
     partial = max_sequences is not None and max_sequences < len(sequences)
     if max_sequences is not None:
         sequences = sequences[:max_sequences]
     group_dir = cfg.output_root / group
+
+    seq_data: dict[str, SequenceData] = {}
+    screening_info: Optional[dict[str, Any]] = None
+    screening_by_id: dict[str, Mapping[str, Any]] = {}
+    candidates: dict[str, list[TargetPlan]] = {}
+    if cfg.uses_screening:
+        # Kiem tra screening tren TOAN BO nhom (khong chi cac sequence --max-sequences).
+        path = Path(screening_file) if screening_file else screening_path(cfg, group)
+        if not path.is_file():
+            raise ScreeningError(
+                f"Khong thay {path} - chay scripts/screen_occlusion_targets.py --group {group} truoc"
+            )
+        raw = path.read_bytes()
+        screening = json.loads(raw.decode("utf-8"))
+        for seq in all_sequences:
+            seq_data[seq] = load_sequence(split_dir, seq, cfg.category_map)
+            candidates[seq] = plan_candidates(seq_data[seq], cfg)
+        validate_screening(screening, cfg, group, candidates, weights_sha256 or {})
+        screening_by_id = {e["candidate_id"]: e for e in screening["candidates"]}
+        screening_info = {
+            "file": SCREENING_NAME,
+            "sha256": config_sha256(raw),
+            "detectors": {
+                name: {"weights_sha256": d.get("weights_sha256")}
+                for name, d in sorted(screening["detectors"].items())
+            },
+        }
 
     index: dict[str, Any] = {
         "group": group,
@@ -513,9 +712,41 @@ def generate_group(
         "scenarios": [],
         "skipped_existing": [],
     }
+    if cfg.uses_screening:
+        assert cfg.target_lock is not None and screening_info is not None
+        index.update({
+            "target_lock": {**cfg.target_lock.as_dict(), "required_detectors": list(cfg.required_detectors)},
+            "screening": screening_info,
+            "candidates_per_sequence": {},
+            "eligible_per_sequence": {},
+            "selected_targets": {},
+        })
     for seq in sequences:
-        data = load_sequence(split_dir, seq, cfg.category_map)
-        plans = plan_sequence(data, cfg)
+        data = seq_data.get(seq) or load_sequence(split_dir, seq, cfg.category_map)
+        extra: dict[int, dict[str, Any]] = {}
+        if cfg.uses_screening:
+            assert cfg.target_lock is not None and screening_info is not None
+            cands = candidates[seq]
+            plans = select_screened_targets(cands, screening_by_id, cfg)
+            index["candidates_per_sequence"][seq] = len(cands)
+            index["eligible_per_sequence"][seq] = sum(
+                1 for p in cands
+                if candidate_eligible(screening_by_id[candidate_id(seq, p.target_id)], cfg.required_detectors)
+            )
+            index["selected_targets"][seq] = [p.target_id for p in plans]
+            rank = {p.target_id: k for k, p in enumerate(cands)}
+            for p in plans:
+                extra[p.target_id] = {
+                    "target_lock": {
+                        **cfg.target_lock.as_dict(),
+                        "required_detectors": list(cfg.required_detectors),
+                        "occlusion_start_frame_idx": cfg.pre_occlusion_frames,
+                    },
+                    "screening": {**screening_info, "candidate_id": candidate_id(seq, p.target_id),
+                                  "candidate_rank": rank[p.target_id]},
+                }
+        else:
+            plans = plan_sequence(data, cfg)
         if not plans:
             index["sequences_without_target"].append(seq)
             continue
@@ -543,7 +774,8 @@ def generate_group(
                                 "dung --overwrite de sinh lai"
                             )
                         shutil.rmtree(out_dir)
-                    write_scenario(data, plan, duration, spec, cfg, group, out_dir)
+                    write_scenario(data, plan, duration, spec, cfg, group, out_dir,
+                                   extra_manifest=extra.get(plan.target_id))
     if not dry_run:
         group_dir.mkdir(parents=True, exist_ok=True)
         # index.json duoc commit: chi ghi phan xac dinh boi config (bo skipped_existing,
@@ -617,6 +849,9 @@ def frame_order_problems(
 __all__: Sequence[str] = [
     "ScenarioConfig", "ScenarioConfigError", "OccluderSpec", "TargetPlan", "load_scenario_config",
     "load_sequence", "valid_frames", "valid_starts", "plan_sequence", "occluder_box",
+    "plan_candidates", "candidate_id", "candidate_eligible", "validate_screening",
+    "select_screened_targets", "screening_path", "file_sha256", "ScreeningError",
+    "SCREENING_NAME", "SCREENING_KIND",
     "write_scenario", "generate_group", "scenario_name", "derived_seed", "load_manifest",
     "manifest_ground_truth", "occluded_flags", "config_sha256", "scenario_image_names", "frame_order_problems",
 ]
