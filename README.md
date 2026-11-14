@@ -33,9 +33,12 @@ khong sua ma nguon noi bo cua `ultralytics`.
 | `configs/train_config.yaml` | Config train dung chung cho YOLO11-seg va YOLO26-seg; `inference.conf` dung chung khi inference/danh gia |
 | `configs/motion_memory.yaml` | Tham so Motion Memory (gia tri khoi dau chua tinh chinh; CLI > file > mac dinh dataclass) |
 | `configs/eval_visdrone.yaml` | Danh gia VisDrone2019-MOT (val/test-dev): nguong IoU/IoA, class-aware, warmup FPS; chon muc tieu theo GT |
-| `configs/occlusion_scenarios.yaml` | Kich ban occlusion nhan tao: seed, quy tac chon muc tieu, thoi luong, kieu che, nhom dev/heldout (co dinh truoc khi chay) |
-| `configs/occlusion_metrics.yaml` | Dinh nghia + nguong do do occlusion (co dinh truoc khi chay) |
-| `src/occlusion_scenarios.py` | Sinh kich ban occlusion co GT moi frame |
+| `configs/occlusion_scenarios.yaml` | Kich ban occlusion **v1** (lan chay thu "timing", giu de truy vet): chon muc tieu chi theo GT |
+| `configs/occlusion_scenarios_v2.yaml` | Kich ban occlusion **v2** (mac dinh): 12 ung vien/sequence, screening khoa muc tieu (`target_lock`), giu toi da 4 muc tieu dat/sequence; output `data/occlusion_test_scenarios/v2/` |
+| `configs/occlusion_metrics.yaml` | Dinh nghia + nguong do do occlusion **v1** (kich ban chua khoa van tinh vao tong) |
+| `configs/occlusion_metrics_v2.yaml` | Do do occlusion **v2** (mac dinh): chi tinh ti le tren kich ban da khoa truoc khi che, dem rieng kich ban chua khoa |
+| `src/occlusion_scenarios.py` | Sinh kich ban occlusion co GT moi frame (v2: loc theo screening.json) |
+| `src/occlusion_screening.py` | Screening khoa muc tieu tren clip sach truoc khi che (luat chon muc tieu that cua pipeline) |
 | `src/detect.py` | Chay detection, log JSONL |
 | `src/track.py` | Chay detection + BoT-SORT, log JSONL |
 | `src/motion_memory.py` | Motion memory / temporal propagation |
@@ -140,10 +143,20 @@ python scripts/run_pipeline.py ... --motion-memory \
 # conf/imgsz/classes lay tu meta; SHA-256 log ghi vao run_context.json).
 # Log pipeline co truong `path` (anh nguon) de kiem tra thu tu anh.
 
-# Ablation tren kich ban occlusion (roadmap buoc 4-6), chay tren cloud:
-python scripts/generate_occlusion_scenarios.py --group dev
-python scripts/run_occlusion_ablation.py --group dev --tag 001 \
-    --detector yolo11=<yolo11 best.pt> --detector yolo26=<yolo26 best.pt> --device 0
+# Ablation tren kich ban occlusion v2 (roadmap buoc 4-6), chay tren cloud:
+DET="--detector yolo11=<yolo11 best.pt> --detector yolo26=<yolo26 best.pt>"
+# 1. Screening khoa muc tieu (GPU): YOLO + BoT-SORT tren 30 frame SACH truoc
+#    khi che cua moi ung vien, luat chon muc tieu that + 3 frame cuoi dung vi
+#    tri; dat <=> CA HAI detector khoa duoc. --dry-run / --limit N (partial).
+python scripts/screen_occlusion_targets.py --group dev $DET --device 0
+# 2. Sinh kich ban CHI cho muc tieu dat (tu choi screening partial / khac
+#    config_sha256 / khac danh sach ung vien / khac weights sha256)
+python scripts/generate_occlusion_scenarios.py --group dev $DET
+# 3. Ablation (metrics v2 mac dinh; detector + weights phai khop screening)
+python scripts/run_occlusion_ablation.py --group dev --tag v2_001 \
+    --scenario-root data/occlusion_test_scenarios/v2 $DET --device 0
+# Kich ban v1 (lan chay thu): --config configs/occlusion_scenarios.yaml khi sinh,
+# --metrics-config configs/occlusion_metrics.yaml khi chay ablation.
 # Moi detector x kich ban: src.track chay YOLO + BoT-SORT MOT lan
 # (experiments/<detector>_botsort_tracks_occl_dev_001/), roi baseline va Motion
 # Memory hau ky tren CUNG log do (run_pipeline --replay-tracks).
@@ -152,8 +165,9 @@ python scripts/run_occlusion_ablation.py --group dev --tag 001 \
 # benchmark; dung --tag rieng).
 # -> experiments/<detector>_botsort[_mm]_occl_dev_001/{config.yaml,metrics.json}
 #    + experiments/<detector>_botsort_mm_occl_dev_001/ablation_vs_<baseline>.json
-# Commit: index.json cua nhom kich ban, config.yaml, metrics.json gop,
-# ablation_vs_*.json. Gitignore: anh/manifest kich ban, experiments/**/scenarios/.
+# Commit: index.json (+ screening.json voi v2) cua nhom kich ban, config.yaml,
+# metrics.json gop, ablation_vs_*.json. Gitignore: anh/manifest kich ban,
+# data/occlusion_screening/ (clip + log track screening), experiments/**/scenarios/.
 # Nhom heldout CHI chay sau khi da chot tham so Motion Memory tren dev.
 
 # imgsz: --imgsz > detector.imgsz trong experiments/<id>/config.yaml >
@@ -194,8 +208,8 @@ co/khong Motion Memory tren cung detector + tracker. Chi tiet: CLAUDE.md muc 12.
 
 ### Do do kich ban occlusion (`python -m src.evaluate occlusion|aggregate|compare`)
 
-Dinh nghia + nguong co dinh trong `configs/occlusion_metrics.yaml` (commit
-truoc moi lan chay that). Moi kich ban co GT bbox o MOI frame (manifest), khoang
+Dinh nghia + nguong co dinh trong `configs/occlusion_metrics.yaml` (v1) va
+`configs/occlusion_metrics_v2.yaml` (v2, mac dinh - xem muc Metrics v2 duoi day). Moi kich ban co GT bbox o MOI frame (manifest), khoang
 che la mot doan lien tuc [a, b]:
 
 - **Output** o frame k: co Motion Memory -> `predicted_bbox` (TRACKING = bbox
@@ -212,7 +226,8 @@ che la mot doan lien tuc [a, b]:
 - **Sai so vi tri trong luc che**: trung binh khoang cach tam tren cac frame
   trong [a, b] co output (kem so frame co output).
 - Ghi them: bat lai bang track ID moi hay cu, `recover_reason`, muc tieu co duoc
-  bat truoc khi che khong (kich ban khong bat duoc van tinh vao tong).
+  bat truoc khi che khong (v1: kich ban khong bat duoc van tinh vao tong;
+  v2: loai khoi ti le, dem rieng).
 - **Gop nhieu kich ban**: cong gop tu so/mau so (khong trung binh cac ti le),
   tach theo thoi luong che va kieu che; tu choi gop khac nhom (dev/heldout),
   khac tham so chay, hoac thieu kich ban so voi `index.json` (tru
@@ -232,6 +247,37 @@ python -m src.evaluate aggregate --exp-dir experiments/<exp_id> \
 python -m src.evaluate compare --baseline experiments/<base_id> \
     --memory experiments/<mm_id> --output experiments/<mm_id>/ablation_vs_<base_id>.json
 ```
+
+#### Metrics v2 (`configs/occlusion_metrics_v2.yaml`, mac dinh tu 2026-11-14)
+
+Lan chay thu cho thay quy tac v1 chon ca muc tieu ma detector khong thay; cac
+kich ban "chua khoa" do bi tinh la Re-ID that bai, % dung = 0 va gap = ca kich
+ban, lam loang ti le cua CA baseline lan Motion Memory. v2:
+
+- **Khoa duoc truoc khi che** (`src/utils/gt_target.py` `evaluate_target_lock`,
+  tham so trong `target_lock` cua `configs/occlusion_scenarios_v2.yaml`):
+  `GtTargetSelector` chon duoc track trong `max_search_frames` (10) frame dau
+  (IoU >= 0.5, KHONG xet class) VA track da chon co IoU >= 0.5 voi GT o 3 frame
+  lien truoc khi che. Tinh tren log track replay dung chung -> baseline va
+  Motion Memory co cung tap kich ban da khoa. Dung CUNG dinh nghia cho
+  screening, run_pipeline (tham so lay tu manifest) va danh gia.
+- Moi ti le / tong / gap / time-to-reidentify chi tren kich ban da khoa. Bao
+  cao rieng `scenarios_total`, `scenarios_not_locked`, `not_locked_scenario_ids`
+  (ca theo thoi luong va kieu che), them `independent_targets`,
+  `independent_sequences`, `per_sequence` (so kich ban / muc tieu moi
+  sequence - de sau nay lam khoang tin cay theo sequence; 16 kich ban cua mot
+  muc tieu tuong quan manh).
+- `compare` tu choi neu hai cau hinh co tap kich ban da khoa khac nhau;
+  `aggregate`/`compare` tu choi gop v1 voi v2. `metrics_config` ghi
+  `config_sha256`; `provenance` ghi sha256 config kich ban va metrics.
+- `evaluate occlusion` khong truyen `--metrics-config` -> chon theo manifest
+  (v2 neu co `target_lock`); runner luon truyen ro rang.
+
+**Thien lech chon mau (ghi trong moi bao cao dung v2):** ket qua chi co dieu
+kien tren muc tieu ma CA HAI detector khoa duoc truoc khi che (nghieng ve vat
+lon, tuong phan cao, lop pho bien); khong suy rong cho muc tieu kho. So sanh
+YOLO11 vs YOLO26 tren occlusion chi tren tap giao do. Ti le dat va phan bo
+lop/kich thuoc ung vien vs dat nam trong `screening.json`.
 
 Han che: vat che nhan tao khong giong che khuat that - xem `data/README.md`.
 

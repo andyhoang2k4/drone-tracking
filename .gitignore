@@ -39,6 +39,14 @@ data/occlusion_test_scenarios/**
 # config_sha256); anh, manifest, annotations tung kich ban bi gitignore.
 !data/occlusion_test_scenarios/*/
 !data/occlusion_test_scenarios/*/index.json
+# Kich ban v2 (configs/occlusion_scenarios_v2.yaml): index.json + screening.json
+# cua tung nhom (nho, commit duoc); anh/manifest/annotations bi gitignore.
+!data/occlusion_test_scenarios/v2/*/
+!data/occlusion_test_scenarios/v2/*/index.json
+!data/occlusion_test_scenarios/v2/*/screening.json
+# Clip sach + log track cua screening (scripts/screen_occlusion_targets.py):
+# khong commit, sao luu cung kich ban.
+data/occlusion_screening/
 # Sinh boi scripts/prepare_visdrone.py, duong dan theo tung may
 data/dataset.yaml
 !data/**/.gitkeep

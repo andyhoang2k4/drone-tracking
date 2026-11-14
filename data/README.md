@@ -6,7 +6,8 @@ Thu muc dataset. **Khong commit dataset that** (xem `.gitignore`).
 |---|---|
 | `raw/` | Video/anh goc chua gan nhan |
 | `labeled/` | Dataset da gan nhan, dung dinh dang Ultralytics segmentation |
-| `occlusion_test_scenarios/` | Kich ban occlusion nhan tao + ground truth |
+| `occlusion_test_scenarios/` | Kich ban occlusion nhan tao + ground truth (v1 o `<nhom>/`, v2 o `v2/<nhom>/`) |
+| `occlusion_screening/` | Clip sach + log track cua screening khoa muc tieu v2 (gitignore, sao luu) |
 
 ## Split theo video/sequence
 
@@ -22,14 +23,38 @@ tinh duoc "% frame du doan dung" va "sai so vi tri trong luc occlusion".
 
 ### Sinh kich ban occlusion nhan tao (roadmap buoc 4)
 
-Quy tac co dinh trong `configs/occlusion_scenarios.yaml` (seed, quy tac chon
-muc tieu, thoi luong che, kieu che, nhom). Can VisDrone2019-MOT val + test-dev
-da giai nen o `data/raw/VisDrone2019-MOT/`.
+Can VisDrone2019-MOT val + test-dev da giai nen o `data/raw/VisDrone2019-MOT/`.
+
+**v2 (mac dinh, `configs/occlusion_scenarios_v2.yaml`)** - muc tieu phai
+"khoa duoc truoc khi che" voi CA HAI detector:
+
+1. Moi sequence lay 12 ung vien (thu tu tron co seed) trong cac muc tieu thoa
+   quy tac GT (giong v1).
+2. `scripts/screen_occlusion_targets.py` (GPU): voi moi ung vien, clip 30
+   frame SACH truoc khi che (hardlink, giong het frame 0..29 cua moi kich ban
+   cua muc tieu do) -> `src.track` moi detector -> luat chon muc tieu that
+   (`GtTargetSelector`, khong xet class) + track da chon dung vi tri o 3 frame
+   cuoi. Ket qua: `occlusion_test_scenarios/v2/<nhom>/screening.json`.
+3. `scripts/generate_occlusion_scenarios.py`: moi sequence giu toi da 4 ung
+   vien DAT dau tien theo thu tu co seed, chi sinh kich ban cho chung.
 
 ```bash
-python scripts/generate_occlusion_scenarios.py --group dev --dry-run   # liet ke
-python scripts/generate_occlusion_scenarios.py --group dev             # nhom dev (val)
-python scripts/generate_occlusion_scenarios.py --group heldout         # nhom giu rieng (test-dev)
+DET="--detector yolo11=<yolo11 best.pt> --detector yolo26=<yolo26 best.pt>"
+python scripts/screen_occlusion_targets.py --group dev $DET --device 0 --dry-run
+python scripts/screen_occlusion_targets.py --group dev $DET --device 0
+python scripts/generate_occlusion_scenarios.py --group dev $DET --dry-run
+python scripts/generate_occlusion_scenarios.py --group dev $DET
+```
+
+Cung quy tac cho heldout: screening chi chay detector + tracker tren clip sach
+(khong Motion Memory, khong kich ban che), khong tinh chinh gi tren heldout.
+Du lieu train KHONG dung de chon muc tieu.
+
+**v1 (`configs/occlusion_scenarios.yaml`, lan chay thu "timing")** - chon muc
+tieu chi theo GT, giu de truy vet:
+
+```bash
+python scripts/generate_occlusion_scenarios.py --config configs/occlusion_scenarios.yaml --group dev
 ```
 
 Moi kich ban `occlusion_test_scenarios/<nhom>/<sequence>__t<id>__d<thoi luong>__<kieu che>/`:
@@ -38,8 +63,14 @@ Moi kich ban `occlusion_test_scenarios/<nhom>/<sequence>__t<id>__d<thoi luong>__
 `manifest.json` (GT bbox cua muc tieu o MOI frame, khoang frame bi che, kieu
 che, seed, sequence nguon). Cung config + seed -> cung kich ban.
 
-Commit gi: **chi `occlusion_test_scenarios/<nhom>/index.json`** (danh sach kich
-ban, sequence, seed, `config_sha256`). Anh, `manifest.json`, `annotations.txt`
+Kich ban v2 co them trong `manifest.json`: `target_lock` (tham so khoa +
+`occlusion_start_frame_idx`) va `screening` (sha256 screening.json, weights
+sha256 tung detector, thu hang ung vien).
+
+Commit gi: **chi `occlusion_test_scenarios/<nhom>/index.json`** (v2: them
+`occlusion_test_scenarios/v2/<nhom>/screening.json`) (danh sach kich
+ban, sequence, seed, `config_sha256`; v2: so ung vien / so dat / muc tieu chon
+moi sequence). Anh, `manifest.json`, `annotations.txt`
 cua tung kich ban bi gitignore - sinh lai duoc tu config da commit + dataset
 VisDrone (sinh xac dinh). `config_sha256` tinh tren noi dung da bo ky tu CR nen
 khong phu thuoc line ending (Windows/Linux). index.json khong ghi danh sach

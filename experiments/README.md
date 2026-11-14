@@ -55,6 +55,15 @@ vao tracker. `compare` tu choi neu `tracks_sha256` khac nhau.
 Tag dung voi `--limit-scenarios` (do thoi gian) phai khac tag cua lan chay du;
 ban gop cua no co `completeness.complete = false`.
 
+Kich ban v2 (`--scenario-root data/occlusion_test_scenarios/v2`) danh gia bang
+metrics v2 (mac dinh `--metrics-config configs/occlusion_metrics_v2.yaml`):
+kich ban chua khoa truoc khi che duoc dem rieng (`scenarios_not_locked`), khong
+lam loang ti le. Runner tu choi detector/weights khong khop `screening.json`.
+Dung tag moi (vd `v2_001`), khong dung lai tag cua lan chay v1. Cac experiment
+`*_timing` (v1, lan chay thu) giu nguyen, khong xoa, khong gop voi v2. Moi bao
+cao dung v2 phai ghi thien lech chon mau (chi muc tieu ca hai detector khoa
+duoc) - xem README goc, muc Metrics v2.
+
 Commit: `config.yaml`, `metrics.json` (gop; khoa `provenance` giu commit git,
 so lan chay co working tree dirty, version package cua cac lan chay) va
 `<..._mm_...>/ablation_vs_<baseline>.json`. Gitignore: toan bo `scenarios/`
