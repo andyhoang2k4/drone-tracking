@@ -155,6 +155,7 @@ class Context:
     sources: dict[str, dict]     # det -> weights, tracks_dir, baseline_dir, source_mm_dir
     base_ns: argparse.Namespace  # Namespace cho ham cua run_occlusion_ablation
     manifests: dict[str, dict] = field(default_factory=dict)
+    replay: dict[tuple[str, str], dict] = field(default_factory=dict)
 
     @property
     def summary_dir(self) -> Path:
@@ -182,6 +183,50 @@ class Context:
 
     def tracks_log(self, det: str, scen: str) -> Path:
         return self.sources[det]["tracks_dir"] / "scenarios" / scen / abl.TRACKS_LOG
+
+    def replay_inputs(self, det: str, scen: str) -> dict:
+        """Tham so replay lay tu CHINH tracks.meta.json cua log tracker nguon.
+
+        run_pipeline --replay-tracks doi chieu weights/source/tracker voi meta
+        (apply_replay_meta), va `evaluate compare` doi chieu CHUOI weights/source/
+        tracker voi baseline nguon (cung chuoi da truyen cho src.track). Vi vay
+        dung nguyen chuoi cua meta, khong tu dung duong dan moi (vd tu
+        --scenario-root tuyet doi khi ablation nguon chay voi duong dan tuong doi).
+        """
+        key = (det, scen)
+        if key not in self.replay:
+            self.replay[key] = _replay_inputs_from_meta(self, det, scen)
+        return self.replay[key]
+
+
+def _resolve_run_path(value: str) -> Path:
+    """Duong dan trong meta/CLI cua lenh con (cwd = goc repo) -> duong dan tuyet doi."""
+    p = Path(value)
+    return (p if p.is_absolute() else REPO_ROOT / p).resolve()
+
+
+def _replay_inputs_from_meta(ctx: "Context", det: str, scen: str) -> dict:
+    from scripts.run_pipeline import REPLAY_PATH_KEYS, replay_meta_path
+
+    log = ctx.tracks_log(det, scen)
+    meta_path = replay_meta_path(log)
+    if not meta_path.is_file():
+        raise ValueError(f"Khong thay {meta_path}")
+    meta = json.loads(meta_path.read_text(encoding="utf-8"))
+    missing = [k for k in REPLAY_PATH_KEYS if not meta.get(k)]
+    if missing:
+        raise ValueError(f"{meta_path}: thieu {missing}")
+    source = Path(str(meta["source"]))
+    if source.name != "images" or source.parent.name != scen:
+        raise ValueError(f"{meta_path}: source={meta['source']!r} khong phai <...>/{scen}/images")
+    expected = (ctx.args.scenario_root / ctx.rules.group / scen / "images").resolve()
+    if _resolve_run_path(str(source)) != expected:
+        raise ValueError(f"{meta_path}: source={meta['source']!r} khong tro toi {expected} (--scenario-root khac "
+                         "noi ablation nguon da dung?)")
+    if Path(str(meta["weights"])) != Path(ctx.sources[det]["weights"]):
+        raise ValueError(f"{meta_path}: weights={meta['weights']!r} khac config.yaml cua log tracker "
+                         f"({ctx.sources[det]['weights']!r})")
+    return {"scen_dir": source.parent, "weights": str(meta["weights"]), "meta": meta}
 
 
 def load_tuning(path: Path) -> tuple[mt.TuningRules, dict, dict]:
@@ -269,6 +314,15 @@ def build_context(args: argparse.Namespace) -> Context:
         base_mm={"path": str(base_path), "sha256": file_sha256(base_path), "values": base_values},
         index_path=index_path, index=index, scenarios=scenarios, sources=sources, base_ns=base_ns,
     )
+    problems = []
+    for det in rules.detectors:
+        for scen in scenarios:
+            try:
+                ctx.replay_inputs(det, scen)       # nap truoc (khong doc song song)
+            except ValueError as exc:
+                problems.append(str(exc))
+    if problems:
+        raise SystemExit("Meta cua log tracker nguon khong dung duoc:\n  " + "\n  ".join(problems[:20]))
     if not args.dry_run:
         problems = []
         for det in rules.detectors:
@@ -336,6 +390,25 @@ def spec_for(ctx: Context, det: str, cfg_id: str) -> abl.RunSpec:
     return abl.RunSpec(det, ctx.sources[det]["weights"], True, ctx.exp_id(det, cfg_id), ctx.exp_dir(det, cfg_id))
 
 
+def unit_inputs(ctx: Context, spec: abl.RunSpec, det: str, scen: str) -> tuple[abl.RunSpec, Path]:
+    """(RunSpec voi weights cua meta, thu muc kich ban theo source cua meta) cho mot lan replay."""
+    from dataclasses import replace
+
+    inputs = ctx.replay_inputs(det, scen)
+    return replace(spec, weights=inputs["weights"]), inputs["scen_dir"]
+
+
+def unit_pipeline_command(ctx: Context, det: str, cfg_id: str, scen: str, mm_path: Path,
+                          exp_dir: Optional[Path] = None) -> list[str]:
+    """Lenh run_pipeline replay dung nhu do_unit se chay (exp_dir khac -> chay thu o cho khac)."""
+    spec = spec_for(ctx, det, cfg_id)
+    if exp_dir is not None:
+        spec = abl.RunSpec(spec.detector, spec.weights, True, spec.exp_id, exp_dir)
+    replay_spec, scen_dir = unit_inputs(ctx, spec, det, scen)
+    return abl.pipeline_command(replay_spec, scen_dir, ctx.manifest(scen), ctx.tracks_log(det, scen),
+                                config_ns(ctx, mm_path))
+
+
 def experiment_config(ctx: Context, spec: abl.RunSpec, cfg: dict, mm_path: Path) -> dict:
     conf = abl.experiment_config(spec, config_ns(ctx, mm_path), ctx.index_path, ctx.index, ctx.metrics)
     conf["purpose"] = "Tune Motion Memory (dev, replay log tracker nguon) - mot cau hinh cua luoi"
@@ -399,9 +472,10 @@ def run_configs(ctx: Context, configs: list[dict], runner: Runner) -> Report:
                 units.append((spec, ns, group_dir / scen, scen, det))
 
     def do_unit(unit) -> tuple[str, str, str]:
-        spec, ns, scen_dir, scen, det = unit
-        status, label = abl.postprocess_scenario(spec, scen_dir, ctx.manifest(scen), ctx.tracks_log(det, scen),
-                                                 ns, call)
+        spec, ns, _, scen, det = unit
+        replay_spec, scen_dir = unit_inputs(ctx, spec, det, scen)
+        status, label = abl.postprocess_scenario(replay_spec, scen_dir, ctx.manifest(scen),
+                                                 ctx.tracks_log(det, scen), ns, call)
         return spec.exp_id, status, label
 
     start = time.perf_counter()
