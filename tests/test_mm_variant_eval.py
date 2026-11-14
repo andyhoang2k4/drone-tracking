@@ -93,3 +93,84 @@ def test_check_defaults_and_check_file():
     ve.check_file_values(v, variant_values, tuned)
     with pytest.raises(ve.VariantPlanError, match="khac configs/motion_memory_tuned.yaml"):
         ve.check_file_values(v, variant_values, {**tuned, "reid_timeout_frames": 60})
+
+
+# ---------------- hoi quy / quyet dinh / mo ta (du lieu gia) ----------------
+
+def pool(reid=10, n=20, correct=100, occ=1000, out=400, err=5.0) -> dict:
+    return {"scenarios_evaluated": n, "reidentified": reid, "correct_occluded_frames": correct,
+            "occlusion_frames": occ, "occluded_frames_with_output": out, "mean_position_error_px": err,
+            "reidentified_with_new_track_id": 0, "mean_time_to_reidentify_frames": 3.0,
+            "longest_tracking_gap_max": 40, "longest_tracking_gap_mean": 20.0}
+
+
+def agg(complete=True, overall=None, **by_d) -> dict:
+    durs = {str(d): pool() for d in (5, 15, 30, 60)}
+    for k, v in by_d.items():
+        durs[k[1:]] = pool(**v)
+    return {"overall": pool(**(overall or {})), "by_duration_frames": durs,
+            "completeness": {"complete": complete}}
+
+
+def both(**kw) -> dict:
+    return {d: agg(**kw) for d in DETS}
+
+
+def refs(no_mm=None, mm_default=None) -> dict:
+    return {"no_mm": no_mm or both(), "mm_default": mm_default or both(), "mm_tuned": both()}
+
+
+def test_decide_passes_when_all_conditions_hold_on_both_detectors():
+    res = ve.decide(plan(), both(), refs())
+    assert res["passed"] and res["variant"] == "anchor"
+    conds = [c["condition"] for c in res["per_detector"]["yolo11"]["conditions"]]
+    assert conds == ["reid(d15) >= no_mm", "reid(d30) >= no_mm", "reid(d5) >= mm_default",
+                     "cpr(overall) >= mm_default - 0.01"]
+
+
+def test_decide_reid_d15_below_no_mm_fails():
+    res = ve.decide(plan(), both(d15={"reid": 9}), refs())
+    assert not res["passed"] and "KHONG DAT" in res["conclusion"]
+    assert [c["ok"] for c in res["per_detector"]["yolo26"]["conditions"]] == [False, True, True, True]
+
+
+def test_decide_cpr_drop_boundary_exact_fraction():
+    ok = {d: agg(overall={"correct": 90}) for d in DETS}             # 0.09 vs 0.10: drop dung 0.01 -> dat
+    assert ve.decide(plan(), ok, refs())["passed"]
+    bad = {d: agg(overall={"correct": 899, "occ": 10000}) for d in DETS}
+    ref_mm = {d: agg(overall={"correct": 1000, "occ": 10000}) for d in DETS}
+    assert not ve.decide(plan(), bad, refs(mm_default=ref_mm))["passed"]   # drop 0.0101
+
+
+def test_decide_d5_reid_below_mm_default_fails_and_one_detector_enough_to_fail():
+    variant = {"yolo11": agg(), "yolo26": agg(d5={"reid": 9})}
+    res = ve.decide(plan(), variant, refs())
+    assert res["per_detector"]["yolo11"]["passed"] and not res["per_detector"]["yolo26"]["passed"]
+    assert not res["passed"]
+
+
+def test_decide_refuses_partial_and_different_locked_sets():
+    with pytest.raises(ve.VariantPlanError, match="partial"):
+        ve.decide(plan(), both(complete=False), refs())
+    with pytest.raises(ve.VariantPlanError, match="partial"):
+        ve.decide(plan(), both(), refs(no_mm={"yolo11": agg(), "yolo26": agg(complete=False)}))
+    with pytest.raises(ve.VariantPlanError, match="khong cung tap"):
+        ve.decide(plan(), both(d15={"n": 19}), refs())
+
+
+def test_regression_check_exact_equality_with_paths():
+    p = plan()
+    assert ve.regression_check(p, both(), both())["ok"]
+    res = ve.regression_check(p, both(), {"yolo11": agg(), "yolo26": agg(d30={"correct": 101})})
+    assert not res["ok"] and res["differences"] == [
+        "yolo26.by_duration_frames.30.correct_occluded_frames: 100 != 101"]
+    assert not ve.regression_check(p, both(), {"yolo11": agg()})["ok"]           # thieu detector
+
+
+def test_box_precision_and_describe():
+    assert ve.box_precision(pool(correct=100, out=400)) == 0.25
+    assert ve.box_precision(pool(correct=0, out=0)) is None
+    d = ve.describe(both(), DETS)
+    assert d["yolo11"]["overall"]["box_precision"] == 0.25
+    assert list(d["yolo11"]["by_duration_frames"]) == ["5", "15", "30", "60"]
+    assert d["yolo11"]["overall"]["reidentification_rate"] == 0.5

@@ -37,6 +37,19 @@ day du). Cau hinh ket hop trung cau hinh da chay -> khong chay lai.
 --select: chon cau hinh cuoi; CHI KHI chon duoc moi ghi
 configs/motion_memory_tuned.yaml (khong ghi de configs/motion_memory.yaml).
 
+Che do bien the (--variant <file khai bao>, vd configs/motion_memory_anchor_dev.yaml):
+chay cac bien the Motion Memory co dinh trong file khai bao (cung log tracker
+nguon, cung ha tang: tham so tu meta, pre-flight, dung som, song song), roi
+kiem tra hoi quy + ap quy tac quyet dinh cua file (src/mm_variant_eval.py) ->
+experiments/<name>/{config.yaml,summary.json,mm_configs/}::
+
+    python scripts/tune_motion_memory.py --variant configs/motion_memory_anchor_dev.yaml --dry-run
+    python scripts/tune_motion_memory.py --variant configs/motion_memory_anchor_dev.yaml --jobs 16
+
+Code tu 2026-11-15 co them tham so anchor_recovery trong MotionMemoryConfig:
+khong chay lai vong tuning cu (tag tune) bang code moi (mm_configs/tuned se
+khac noi dung -> bi tu choi); ket qua tuning cu chi doc.
+
 Resume: kich ban da co metrics.json bi bo qua; log pipeline co ma chua co
 metrics -> chi danh gia lai; loi -> bao, khong xoa.
 --limit-scenarios N: chi N kich ban dau (thu nghiem), tag rieng tu danh so
@@ -72,6 +85,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 import scripts.run_occlusion_ablation as abl  # noqa: E402
+from src import mm_variant_eval as ve  # noqa: E402
 from src import motion_memory_tuning as mt  # noqa: E402
 
 DEFAULT_TUNING_CONFIG = REPO_ROOT / "configs" / "motion_memory_tuning_dev.yaml"
@@ -80,6 +94,7 @@ DEFAULT_TUNED_OUTPUT = REPO_ROOT / "configs" / "motion_memory_tuned.yaml"
 PROTECTED_MM_CONFIG = REPO_ROOT / "configs" / "motion_memory.yaml"
 DEFAULT_TAG = "tune"
 SUMMARY_KIND = "motion_memory_tuning"
+VARIANT_KIND = "motion_memory_variant"
 THREAD_ENV = ("OMP_NUM_THREADS", "MKL_NUM_THREADS", "OPENBLAS_NUM_THREADS", "NUMEXPR_NUM_THREADS")
 
 # Runner tra ve ma thoat, hoac (ma thoat, output) - subprocess_runner tra output de bao loi day du.
@@ -121,6 +136,8 @@ def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
     step = parser.add_mutually_exclusive_group(required=True)
     step.add_argument("--round", type=int, choices=(1, 2), help="Chay vong 1 hoac 2")
     step.add_argument("--select", action="store_true", help="Chon cau hinh cuoi tu ket qua vong 1 + 2")
+    step.add_argument("--variant", type=Path, default=None,
+                      help="File khai bao bien the (vd configs/motion_memory_anchor_dev.yaml)")
     parser.add_argument("--config", type=Path, default=DEFAULT_TUNING_CONFIG, help="Quy tac tuning")
     parser.add_argument("--scenario-root", type=Path, default=DEFAULT_SCENARIO_ROOT)
     parser.add_argument("--output-root", type=Path, default=REPO_ROOT / "experiments")
@@ -139,11 +156,12 @@ def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
         parser.error("--jobs phai >= 1")
     if args.limit_scenarios is not None and args.limit_scenarios < 1:
         parser.error("--limit-scenarios phai >= 1")
+    full_tag = load_variant(args.variant)[0].tag if args.variant is not None else DEFAULT_TAG
     if args.tag is None:
-        args.tag = DEFAULT_TAG if args.limit_scenarios is None else next_limit_tag(
-            args.output_root, args.limit_scenarios)
-    elif args.limit_scenarios is not None and args.tag == DEFAULT_TAG:
-        parser.error(f"--limit-scenarios khong dung tag '{DEFAULT_TAG}' cua lan chay du")
+        args.tag = full_tag if args.limit_scenarios is None else next_limit_tag(
+            args.output_root, args.limit_scenarios, full_tag)
+    elif args.limit_scenarios is not None and args.tag == full_tag:
+        parser.error(f"--limit-scenarios khong dung tag '{full_tag}' cua lan chay du")
     elif re.fullmatch(rf"{DEFAULT_TAG}_limit\d+", args.tag):
         parser.error(f"tag '{args.tag}' la dinh dang cu (truoc ban sua 2026-11-14), danh cho lan chay loi da co - "
                      f"khong dung lai; bo --tag de tu danh so ({DEFAULT_TAG}_limit<N>_run<k>)")
@@ -157,17 +175,17 @@ def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
 def tag_in_use(output_root: Path, tag: str) -> bool:
     """Da co thu muc nao cua tag (summary hoac experiment tung cau hinh, moi nhom)?"""
     root = Path(output_root)
-    return any(root.glob(f"motion_memory_tuning_*_{tag}")) or any(root.glob(f"*_occl_*_{tag}_*"))
+    return any(root.glob(f"*_{tag}")) or any(root.glob(f"*_occl_*_{tag}_*"))
 
 
-def next_limit_tag(output_root: Path, limit: int) -> str:
+def next_limit_tag(output_root: Path, limit: int, prefix: str = DEFAULT_TAG) -> str:
     """Tag tu dong cho lan chay thu --limit-scenarios: <tune>_limit<N>_run<k>, k nho nhat CHUA
     dung -> khong bao gio ghi vao thu muc cua lan chay truoc (ke ca lan chay loi; dinh dang cu
     <tune>_limit<N> khong bao gio duoc sinh lai). Muon resume mot lan chay thu: --tag <tag do>."""
     k = 1
-    while tag_in_use(output_root, f"{DEFAULT_TAG}_limit{limit}_run{k}"):
+    while tag_in_use(output_root, f"{prefix}_limit{limit}_run{k}"):
         k += 1
-    return f"{DEFAULT_TAG}_limit{limit}_run{k}"
+    return f"{prefix}_limit{limit}_run{k}"
 
 
 def _repo_path(value: str) -> Path:
@@ -191,9 +209,13 @@ class Context:
     base_ns: argparse.Namespace  # Namespace cho ham cua run_occlusion_ablation
     manifests: dict[str, dict] = field(default_factory=dict)
     replay: dict[tuple[str, str], dict] = field(default_factory=dict)
+    plan: Optional[ve.VariantPlan] = None   # che do --variant (rules = plan)
 
     @property
     def summary_dir(self) -> Path:
+        if self.plan is not None:
+            suffix = "" if self.args.tag == self.plan.tag else f"_{self.args.tag}"
+            return self.args.output_root / f"{self.plan.name}{suffix}"
         suffix = "" if self.args.tag == DEFAULT_TAG else f"_{self.args.tag}"
         return self.args.output_root / f"motion_memory_tuning_{self.rules.group}{suffix}"
 
@@ -264,6 +286,18 @@ def _replay_inputs_from_meta(ctx: "Context", det: str, scen: str) -> dict:
     return {"scen_dir": source.parent, "weights": str(meta["weights"]), "meta": meta}
 
 
+def load_variant(path: Path) -> tuple[ve.VariantPlan, dict, dict]:
+    """File khai bao bien the -> (plan, du lieu, {path, version, sha256})."""
+    import yaml
+
+    from src.occlusion_scenarios import config_sha256
+
+    raw = Path(path).read_bytes()
+    data = yaml.safe_load(raw.decode("utf-8")) or {}
+    plan = ve.VariantPlan.from_mapping(data)
+    return plan, data, {"path": str(path), "version": plan.version, "sha256": config_sha256(raw)}
+
+
 def load_tuning(path: Path) -> tuple[mt.TuningRules, dict, dict]:
     import yaml
 
@@ -285,11 +319,19 @@ def build_context(args: argparse.Namespace) -> Context:
     from src.occlusion_scenarios import file_sha256
     from src.utils.motion_memory_settings import resolve_motion_memory_config
 
-    rules, data, tuning = load_tuning(args.config)
+    plan: Optional[ve.VariantPlan] = None
+    if getattr(args, "variant", None) is not None:
+        plan, data, tuning = load_variant(args.variant)
+        rules = plan   # cung thuoc tinh group/detectors/source_tag/metrics_config_version
+    else:
+        rules, data, tuning = load_tuning(args.config)
     metrics_path = _repo_path(data["metrics_config"])
     base_path = _repo_path(data["base_motion_memory_config"])
     base_values = asdict(resolve_motion_memory_config(None, base_path).config)
-    mt.check_defaults(rules, base_values)
+    if plan is not None:
+        ve.check_defaults(plan, base_values)
+    else:
+        mt.check_defaults(rules, base_values)
 
     index_path, index = abl.load_index(args.scenario_root, rules.group, allow_partial=False)
     scenarios = list(index["scenarios"])
@@ -347,7 +389,7 @@ def build_context(args: argparse.Namespace) -> Context:
     ctx = Context(
         args=args, rules=rules, tuning=tuning, metrics=metrics,
         base_mm={"path": str(base_path), "sha256": file_sha256(base_path), "values": base_values},
-        index_path=index_path, index=index, scenarios=scenarios, sources=sources, base_ns=base_ns,
+        index_path=index_path, index=index, scenarios=scenarios, sources=sources, base_ns=base_ns, plan=plan,
     )
     problems = []
     for det in rules.detectors:
@@ -374,8 +416,10 @@ def build_context(args: argparse.Namespace) -> Context:
 def run_config(ctx: Context) -> dict:
     """config.yaml cua lan tuning (khong doi giua cac vong)."""
     return {
-        "kind": SUMMARY_KIND,
-        "purpose": "Tune Motion Memory tren dev theo quy tac dang ky truoc (CLAUDE.md muc 13)",
+        "kind": VARIANT_KIND if ctx.plan is not None else SUMMARY_KIND,
+        "purpose": ("Danh gia bien the Motion Memory tren dev theo file khai bao truoc (CLAUDE.md muc 13)"
+                    if ctx.plan is not None else
+                    "Tune Motion Memory tren dev theo quy tac dang ky truoc (CLAUDE.md muc 13)"),
         "tuning_config": ctx.tuning,
         "group": ctx.rules.group,
         "tag": ctx.args.tag,
@@ -921,6 +965,165 @@ def print_summary(summary: dict, path: Path) -> None:
         print("CHU Y: ket qua partial (--limit-scenarios) - KHONG dung de chon cau hinh.")
 
 
+# ---------------- che do bien the (--variant) ----------------
+
+def variant_configs(plan: ve.VariantPlan) -> list[dict]:
+    return [{"id": v.id, "round": "variant", "role": v.role, "param": None, "value": None,
+             "overrides": dict(v.overrides)} for v in plan.variants]
+
+
+def verify_check_files(ctx: Context) -> dict[str, dict]:
+    """Bien the co check_file (vd anchor_lost25 vs configs/motion_memory_tuned.yaml): tham so
+    file (da resolve) + check_extra phai trung tham so bien the; ghi sha256 file. Lech/thieu -> dung."""
+    from src.occlusion_scenarios import file_sha256
+    from src.utils.motion_memory_settings import resolve_motion_memory_config
+
+    out = {}
+    for v in ctx.plan.variants:
+        if not v.check_file:
+            continue
+        path = _repo_path(v.check_file)
+        if not path.is_file():
+            raise SystemExit(f"Bien the {v.id}: khong thay {path} (check_file) - khong chay")
+        file_values = asdict(resolve_motion_memory_config(None, path).config)
+        try:
+            ve.check_file_values(v, mt.config_values(ctx.base_mm["values"], v.overrides), file_values)
+        except ve.VariantPlanError as exc:
+            raise SystemExit(str(exc)) from exc
+        out[v.id] = {"path": str(v.check_file), "sha256": file_sha256(path)}
+    return out
+
+
+def _read_agg(exp_dir: Path) -> Optional[dict]:
+    path = exp_dir / "metrics.json"
+    return json.loads(path.read_text(encoding="utf-8")) if path.is_file() else None
+
+
+def variant_aggs(ctx: Context, vid: str) -> dict[str, dict]:
+    """{det: metrics.json gop} cua mot bien the; complete chi khi aggregate du + co compare voi
+    baseline nguon + khong partial (ghi de completeness.complete cua ban sao)."""
+    out = {}
+    for det in ctx.rules.detectors:
+        exp_dir = ctx.exp_dir(det, vid)
+        agg = _read_agg(exp_dir)
+        if agg is None:
+            continue
+        cmp_ok = (exp_dir / f"ablation_vs_{ctx.sources[det]['baseline_dir'].name}.json").is_file()
+        complete = bool((agg.get("completeness") or {}).get("complete")) and cmp_ok and not ctx.partial
+        out[det] = {**agg, "completeness": {**(agg.get("completeness") or {}), "complete": complete}}
+    return out
+
+
+def reference_aggs(ctx: Context) -> dict[str, dict[str, dict]]:
+    out: dict[str, dict[str, dict]] = {}
+    for name in ctx.plan.references:
+        out[name] = {}
+        for det in ctx.rules.detectors:
+            agg = _read_agg(ctx.args.output_root / ctx.plan.reference_experiment(name, det))
+            if agg is not None:
+                out[name][det] = agg
+    return out
+
+
+def recover_reason_counts(exp_dir: Path) -> Optional[dict]:
+    """So kich ban DA KHOA co recover_reason anchor_id / motion_gate (metrics tung kich ban), theo duration."""
+    from src.evaluate import load_scenario_metrics
+
+    if not (exp_dir / "scenarios").is_dir():
+        return None
+    out: dict[str, dict[str, int]] = {}
+    for m in load_scenario_metrics(exp_dir).values():
+        metrics = m.get("metrics") or {}
+        if not metrics.get("target_locked_at_occlusion"):
+            continue
+        for key in ("overall", str(m["scenario"]["duration_frames"])):
+            row = out.setdefault(key, {"scenarios": 0, "anchor_id": 0, "motion_gate": 0})
+            row["scenarios"] += 1
+            for reason in ("anchor_id", "motion_gate"):
+                row[reason] += reason in (metrics.get("recover_reasons") or [])
+    return dict(sorted(out.items(), key=lambda kv: (kv[0] != "overall", int(kv[0]) if kv[0].isdigit() else 0)))
+
+
+def build_variant_summary(ctx: Context, check_files: dict) -> dict:
+    from src.utils.run_context import git_info
+
+    plan = ctx.plan
+    dets = plan.detectors
+    variants = {v.id: variant_aggs(ctx, v.id) for v in plan.variants}
+    refs = reference_aggs(ctx)
+    status, regression, decision, reason = "complete", None, None, None
+    reg_v, reg_ref = plan.regression["variant"], plan.regression["reference"]
+    try:
+        ve.check_complete(reg_v, variants[reg_v], dets)
+        ve.check_complete(reg_ref, refs.get(reg_ref) or {}, dets)
+        regression = ve.regression_check(plan, variants[reg_v], refs[reg_ref])
+        if not regression["ok"]:
+            status = "blocked_by_regression"
+            reason = (f"{reg_v} KHONG trung {reg_ref} ({regression['n_differences']} khac biet) - DUNG, khong "
+                      "dien giai ket qua bien the")
+        else:
+            decision = ve.decide(plan, variants[plan.decision["variant"]], refs)
+    except ve.VariantPlanError as exc:
+        status, reason = "not_available", str(exc)
+    columns = {**{f"ref:{n}": refs.get(n) or {} for n in plan.references},
+               **{f"variant:{v}": a for v, a in variants.items()}}
+    reasons = {f"ref:{n}": {d: recover_reason_counts(ctx.args.output_root / plan.reference_experiment(n, d))
+                            for d in dets} for n in plan.references}
+    reasons.update({f"variant:{v.id}": {d: recover_reason_counts(ctx.exp_dir(d, v.id)) for d in dets}
+                    for v in plan.variants})
+    return {
+        "kind": VARIANT_KIND,
+        "status": status,
+        "reason": reason,
+        "partial": ctx.partial,
+        "plan": ctx.tuning,
+        "variants": [{"id": v.id, "role": v.role, "overrides": v.overrides,
+                      "experiments": {d: ctx.exp_id(d, v.id) for d in dets},
+                      "mm_config_file": (str(ctx.mm_config_path(v.id).relative_to(ctx.summary_dir))
+                                         if ctx.mm_config_path(v.id).is_file() else None),
+                      "mm_config_sha256": (hashlib.sha256(ctx.mm_config_path(v.id).read_bytes()).hexdigest()
+                                           if ctx.mm_config_path(v.id).is_file() else None)}
+                     for v in plan.variants],
+        "check_files": check_files,
+        "references": {n: {d: plan.reference_experiment(n, d) for d in dets} for n in plan.references},
+        "regression": regression,
+        "decision": decision,
+        "descriptive": {col: ve.describe(aggs, dets) for col, aggs in columns.items()},
+        "recover_reason_scenarios": reasons,
+        "metrics_config": ctx.metrics,
+        "base_motion_memory_config": ctx.base_mm,
+        "scenarios": {"index": str(ctx.index_path), "config_sha256": ctx.index.get("config_sha256"),
+                      "count": len(ctx.index["scenarios"]), "selected": len(ctx.scenarios),
+                      "limit_scenarios": ctx.args.limit_scenarios},
+        "source": {"tag": plan.source_tag, "tracks": {d: tracks_logs_sha256(ctx, d) for d in dets}},
+        "note": "metrics v2: chi kich ban da khoa truoc khi che; thien lech chon mau (chi muc tieu ca hai "
+                "detector khoa duoc). Cot mo ta khong dung de chon cau hinh.",
+        "git": git_info(REPO_ROOT),
+        "generated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+    }
+
+
+def print_variant_summary(summary: dict, path: Path) -> None:
+    print(f"Da ghi: {path}")
+    if summary["partial"]:
+        print("CHU Y: ket qua partial (--limit-scenarios) - KHONG dung de quyet dinh.")
+    if summary["status"] == "blocked_by_regression":
+        print(f"LOI HOI QUY: {summary['reason']}")
+        for d in summary["regression"]["differences"][:10]:
+            print(f"  {d}")
+        return
+    if summary["status"] != "complete":
+        print(f"Chua quyet dinh duoc: {summary['reason']}")
+        return
+    print("Hoi quy: default_regression trung tham chieu (overall + by_duration_frames).")
+    dec = summary["decision"]
+    for det, row in dec["per_detector"].items():
+        for c in row["conditions"]:
+            print(f"  {det}: {c['condition']}: {c['variant']['fraction']} vs {c['reference']['fraction']} "
+                  f"-> {'dat' if c['ok'] else 'TRUOT'}")
+    print(f"KET LUAN: {dec['conclusion']}")
+
+
 # ---------------- main ----------------
 
 def main(argv: Optional[list[str]] = None, runner: Runner = subprocess_runner) -> int:
@@ -932,6 +1135,9 @@ def main(argv: Optional[list[str]] = None, runner: Runner = subprocess_runner) -
         abl.ensure_experiment_config(ctx.summary_dir, run_config(ctx))
 
     configs: list[dict] = []
+    if ctx.plan is not None:
+        check_files = verify_check_files(ctx)
+        configs = variant_configs(ctx.plan)
     if args.round == 1:
         configs = mt.round1_configs(ctx.rules)
     elif args.round == 2:
@@ -957,6 +1163,12 @@ def main(argv: Optional[list[str]] = None, runner: Runner = subprocess_runner) -
                   f"Output:\n{output_tail(st['example_output'])}", flush=True)
     if args.dry_run:
         return 0
+    if ctx.plan is not None:
+        summary = build_variant_summary(ctx, check_files)
+        path = write_summary(ctx, summary)
+        print_variant_summary(summary, path)
+        # partial (--limit-scenarios): khong quyet dinh la dung thiet ke -> chi loi lenh moi la loi
+        return 1 if failed or (summary["status"] != "complete" and not ctx.partial) else 0
     summary = build_summary(ctx)
     path = write_summary(ctx, summary)
     print_summary(summary, path)

@@ -155,3 +155,150 @@ def check_file_values(variant: Variant, variant_values: Mapping[str, Any],
             if variant_values.get(k) != expected.get(k)}
     if diff:
         raise VariantPlanError(f"Bien the {variant.id}: tham so khac {variant.check_file} (+ check_extra): {diff}")
+
+
+# ---------------- ket qua: hoi quy, quyet dinh, mo ta ----------------
+# Dau vao: metrics.json GOP (src.evaluate aggregate, metrics v2) cua tung
+# experiment, dang {det: agg}. Moi ti le so bang Fraction tren count.
+
+def check_complete(label: str, aggs: Mapping[str, Mapping[str, Any]], detectors) -> None:
+    for det in detectors:
+        agg = aggs.get(det)
+        if agg is None:
+            raise VariantPlanError(f"{label}/{det}: chua co metrics.json gop")
+        if not (agg.get("completeness") or {}).get("complete"):
+            raise VariantPlanError(f"{label}/{det}: ket qua chua day du/partial - khong dung de quyet dinh")
+
+
+def _diff_paths(a: Any, b: Any, path: str) -> list[str]:
+    if isinstance(a, Mapping) and isinstance(b, Mapping):
+        out = []
+        for key in sorted(set(a) | set(b), key=str):
+            if key not in a or key not in b:
+                out.append(f"{path}.{key}: chi co o mot ben")
+            else:
+                out.extend(_diff_paths(a[key], b[key], f"{path}.{key}"))
+        return out
+    return [] if a == b else [f"{path}: {a!r} != {b!r}"]
+
+
+def regression_check(plan: VariantPlan, variant_aggs: Mapping[str, Mapping[str, Any]],
+                     reference_aggs: Mapping[str, Mapping[str, Any]]) -> dict[str, Any]:
+    """Bien the hoi quy phai TRUNG tham chieu o moi section (so sanh chinh xac)."""
+    diffs: list[str] = []
+    for det in plan.detectors:
+        for sec in plan.regression["sections"]:
+            a = (variant_aggs.get(det) or {}).get(sec)
+            b = (reference_aggs.get(det) or {}).get(sec)
+            if a is None or b is None:
+                diffs.append(f"{det}.{sec}: thieu")
+            else:
+                diffs.extend(_diff_paths(a, b, f"{det}.{sec}"))
+    return {"ok": not diffs, "differences": diffs[:50], "n_differences": len(diffs)}
+
+
+def _pool_of(agg: Mapping[str, Any], duration: Optional[int]) -> Mapping[str, Any]:
+    if duration is None:
+        return agg["overall"]
+    pool = (agg.get("by_duration_frames") or {}).get(str(duration))
+    if pool is None:
+        raise VariantPlanError(f"Khong co by_duration_frames[{duration}]")
+    return pool
+
+
+def _reid(pool: Mapping[str, Any]) -> Fraction:
+    if not pool.get("scenarios_evaluated"):
+        raise VariantPlanError("Khong co kich ban da khoa trong nhom - khong tinh duoc ti le re-ID")
+    return Fraction(pool["reidentified"], pool["scenarios_evaluated"])
+
+
+def _cpr(pool: Mapping[str, Any]) -> Fraction:
+    if not pool.get("occlusion_frames"):
+        raise VariantPlanError("Khong co frame bi che - khong tinh duoc cpr")
+    return Fraction(pool["correct_occluded_frames"], pool["occlusion_frames"])
+
+
+def _same_set(a: Mapping[str, Any], b: Mapping[str, Any], where: str) -> None:
+    for key in ("scenarios_evaluated", "occlusion_frames"):
+        if a.get(key) != b.get(key):
+            raise VariantPlanError(f"{where}: {key} {a.get(key)} != {b.get(key)} - khong cung tap kich ban da khoa")
+
+
+def _frac(x: Fraction) -> dict[str, Any]:
+    return {"value": float(x), "fraction": f"{x.numerator}/{x.denominator}"}
+
+
+def decide(plan: VariantPlan, variant_aggs: Mapping[str, Mapping[str, Any]],
+           reference_aggs: Mapping[str, Mapping[str, Mapping[str, Any]]]) -> dict[str, Any]:
+    """Quy tac quyet dinh cua file khai bao, TUNG detector; dat <=> moi detector dat moi dieu kien.
+
+    reference_aggs: {ten tham chieu: {det: agg}}."""
+    vid = plan.decision["variant"]
+    check_complete(vid, variant_aggs, plan.detectors)
+    for ref in {r["reference"] for r in plan.decision["reid_not_below"]} | {plan.decision["cpr_max_drop"]["reference"]}:
+        check_complete(ref, reference_aggs.get(ref) or {}, plan.detectors)
+    drop = Fraction(plan.decision["cpr_max_drop"]["value"])
+    per_det = {}
+    for det in plan.detectors:
+        conds = []
+        mine = variant_aggs[det]
+        for rule in plan.decision["reid_not_below"]:
+            ref = reference_aggs[rule["reference"]][det]
+            for d in rule["durations"]:
+                a, b = _pool_of(mine, d), _pool_of(ref, d)
+                _same_set(a, b, f"{det} d{d} vs {rule['reference']}")
+                ra, rb = _reid(a), _reid(b)
+                conds.append({"condition": f"reid(d{d}) >= {rule['reference']}", "variant": _frac(ra),
+                              "reference": _frac(rb), "ok": ra >= rb})
+        ref_name = plan.decision["cpr_max_drop"]["reference"]
+        a, b = _pool_of(mine, None), _pool_of(reference_aggs[ref_name][det], None)
+        _same_set(a, b, f"{det} overall vs {ref_name}")
+        ca, cb = _cpr(a), _cpr(b)
+        conds.append({"condition": f"cpr(overall) >= {ref_name} - {plan.decision['cpr_max_drop']['value']}",
+                      "variant": _frac(ca), "reference": _frac(cb), "delta": float(ca - cb), "ok": ca >= cb - drop})
+        per_det[det] = {"passed": all(c["ok"] for c in conds), "conditions": conds}
+    passed = all(v["passed"] for v in per_det.values())
+    return {"variant": vid, "passed": passed, "per_detector": per_det,
+            "conclusion": (f"DAT: bien the {vid} dat moi dieu kien tren ca hai detector" if passed else
+                           f"KHONG DAT: bien the {vid} truot it nhat mot dieu kien (ket qua am, ghi nhan)")}
+
+
+def box_precision(pool: Mapping[str, Any]) -> Optional[float]:
+    """correct_occluded_frames / occluded_frames_with_output (frame dung luon co box); None neu khong co box."""
+    n = pool.get("occluded_frames_with_output") or 0
+    return pool["correct_occluded_frames"] / n if n else None
+
+
+def describe_pool(pool: Mapping[str, Any]) -> dict[str, Any]:
+    occ, ev = pool.get("occlusion_frames") or 0, pool.get("scenarios_evaluated") or 0
+    return {
+        "scenarios_evaluated": ev,
+        "occlusion_frames": occ,
+        "correct_occluded_frames": pool.get("correct_occluded_frames"),
+        "correct_prediction_ratio": pool["correct_occluded_frames"] / occ if occ else None,
+        "occluded_frames_with_output": pool.get("occluded_frames_with_output"),
+        "box_precision": box_precision(pool),
+        "reidentified": pool.get("reidentified"),
+        "reidentification_rate": pool["reidentified"] / ev if ev else None,
+        "reidentified_with_new_track_id": pool.get("reidentified_with_new_track_id"),
+        "mean_time_to_reidentify_frames": pool.get("mean_time_to_reidentify_frames"),
+        "longest_tracking_gap_max": pool.get("longest_tracking_gap_max"),
+        "longest_tracking_gap_mean": pool.get("longest_tracking_gap_mean"),
+        "mean_position_error_px": pool.get("mean_position_error_px"),
+    }
+
+
+def describe(aggs: Mapping[str, Mapping[str, Any]], detectors) -> dict[str, Any]:
+    """Bang mo ta (khong quyet dinh) cua mot cot: tung detector, overall + moi duration."""
+    out = {}
+    for det in detectors:
+        agg = aggs.get(det)
+        if agg is None:
+            out[det] = None
+            continue
+        out[det] = {"overall": describe_pool(agg["overall"]),
+                    "by_duration_frames": {d: describe_pool(p) for d, p in
+                                           sorted((agg.get("by_duration_frames") or {}).items(),
+                                                  key=lambda kv: int(kv[0]))},
+                    "complete": bool((agg.get("completeness") or {}).get("complete"))}
+    return out
