@@ -80,3 +80,16 @@ def test_missing_file_rejected(tmp_path: Path):
 def test_unknown_cli_key_rejected():
     with pytest.raises(ValueError):
         resolve_motion_memory_config({"bogus": 1}, DEFAULT_MOTION_MEMORY_CONFIG)
+
+
+def test_bool_type_accepts_only_true_false():
+    from src.utils.motion_memory_settings import _check_type
+
+    assert _check_type("flag", True, "bool", "f") is True
+    assert _check_type("flag", False, "bool", "f") is False
+    for bad in (1, 0, "true", None, 1.0):
+        with pytest.raises(ValueError, match="true/false"):
+            _check_type("flag", bad, "bool", "f")
+    for type_name in ("int", "float"):                  # truong so van tu choi bool
+        with pytest.raises(ValueError, match="khong nhan bool"):
+            _check_type("x", True, type_name, "f")

@@ -45,7 +45,12 @@ def _field_types() -> dict[str, str]:
 
 
 def _check_type(name: str, value: Any, type_name: str, where: str) -> Any:
-    if isinstance(value, bool):
+    if type_name == "bool":
+        # Truong bool (vd anchor_recovery) CHI nhan true/false - khong nhan 0/1.
+        if not isinstance(value, bool):
+            raise ValueError(f"{name}={value!r} trong {where}: can true/false")
+        return value
+    if isinstance(value, bool):  # truong int/float van tu choi bool
         raise ValueError(f"{name}={value!r} trong {where}: khong nhan bool")
     if type_name == "int":
         if not isinstance(value, int):
