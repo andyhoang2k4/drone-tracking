@@ -88,7 +88,11 @@ class MotionPrediction:
     hoac REIDENTIFYING ve TRACKING), None o moi frame khac:
         "same_id"      - dung ID tracker cu quay lai,
         "motion_gate"  - ung vien ID khac qua gate chuyen dong (chi trong LOST),
-        "reid_matched" - phia goi bao Re-ID match (update(reid_matched=True)).
+        "reid_matched" - phia goi bao Re-ID match (update(reid_matched=True)),
+        "anchor_id"    - (chi khi config.anchor_recovery) ID goc (anchor, ID
+                         truoc lan khop motion_gate dau tien) xuat hien lai ->
+                         quay ve ID goc, o MOI state tru FAILED, ke ca khi
+                         dang TRACKING tren ID khac.
     gate_candidates_passed: so ung vien (ID khac) qua gate chuyen dong o lan
     goi nay; None neu gate KHONG duoc xet (khong o LOST, khong co ung vien
     ID khac, hoac da khop bang dung ID). 1 khi khop bang motion_gate; 0 hoac
@@ -107,6 +111,7 @@ class MotionPrediction:
 RECOVER_SAME_ID = "same_id"
 RECOVER_MOTION_GATE = "motion_gate"
 RECOVER_REID_MATCHED = "reid_matched"
+RECOVER_ANCHOR_ID = "anchor_id"
 
 
 @dataclass
@@ -152,6 +157,11 @@ class MotionMemoryConfig:
     Ung vien phai cung class (neu muc tieu co class) va CHI chap nhan khi
     dung mot ung vien qua gate.
 
+    anchor_recovery:
+        Ghi nho ID goc (anchor) khi khop motion_gate sang ID khac; anchor xuat
+        hien lai -> quay ve anchor (xem MotionMemory, "Anchor"). Mac dinh
+        False = hanh vi cu (tai lap moi ket qua truoc 2026-11-15).
+
     Cac gia tri mac dinh la gia tri khoi dau CHUA tinh chinh.
     """
 
@@ -166,6 +176,7 @@ class MotionMemoryConfig:
     match_center_ratio: float = 0.5
     match_gate_growth: float = 0.1
     max_scale_change: float = 2.0
+    anchor_recovery: bool = False
 
     def __post_init__(self) -> None:
         if self.lost_timeout_frames < 1 or self.reid_timeout_frames < 1:
@@ -188,6 +199,8 @@ class MotionMemoryConfig:
             raise ValueError("match_gate_growth phai >= 0")
         if self.max_scale_change < 1.0:
             raise ValueError("max_scale_change phai >= 1")
+        if not isinstance(self.anchor_recovery, bool):
+            raise ValueError("anchor_recovery phai la bool")
 
 
 @dataclass(frozen=True)
@@ -216,6 +229,28 @@ class MotionMemory:
         LOST          --qua lost_timeout_frames----> REIDENTIFYING
         REIDENTIFYING --Re-ID match thanh cong-----> TRACKING
         REIDENTIFYING --qua reid_timeout_frames----> FAILED
+
+    FAILED la trang thai cuoi (chi reset() moi thoat).
+
+    Anchor (chi khi config.anchor_recovery = True; mac dinh tat):
+        - Dat anchor_id = ID dang theo dung luc chap nhan motion_gate sang ID
+          KHAC, chi khi anchor dang trong (B -> C van giu anchor A).
+        - Moi lan goi (tru FAILED; sau nhanh reid_matched), TRUOC nhanh
+          same_id va TRUOC gate: neu track co ID = anchor co trong observation
+          hoac candidates -> chap nhan no, quay ve anchor (recover_reason
+          "anchor_id"), xoa anchor. Khong them dieu kien khoang cach.
+        - Xoa anchor khi quay ve anchor, khi reset(), khi vao FAILED.
+        - Anchor KHONG co han. Gia dinh: tracker (BoT-SORT cua ultralytics)
+          KHONG tai su dung track ID trong mot lan chay, va bo track da mat
+          sau track_buffer (configs/botsort.yaml: 30 frame) nen ID goc khong
+          the "quay lai" sai thoi diem. Doi tracker / track_buffer / cach gan
+          ID -> xem lai gia dinh nay.
+        - Gioi han: lich su KHONG bi xoa khi quay ve anchor - quan sat cua
+          track da "cuop" (B) van nam trong _history, nen van toc uoc luong bi
+          tron quan sat cua B trong khoang velocity_window_frames frame sau
+          khi quay ve.
+        - Rui ro: tracker doi ID nham (ID anchor bi gan cho vat khac) ->
+          quay ve sai vat; hoac B moi dung muc tieu -> roi muc tieu dung.
     """
 
     def __init__(self, config: Optional[MotionMemoryConfig] = None) -> None:
@@ -224,6 +259,7 @@ class MotionMemory:
         self._state: TrackState = TrackState.TRACKING
         self._frames_since_confirmed: int = 0
         self._track_id: Optional[int] = None
+        self._anchor_id: Optional[int] = None  # chi dung khi config.anchor_recovery
         self._last_frame_idx: Optional[int] = None  # frame_idx cua lan goi truoc (neu co)
 
     # ---------------- thuoc tinh doc ----------------
@@ -232,6 +268,11 @@ class MotionMemory:
     def track_id(self) -> Optional[int]:
         """ID tracker hien tai cua muc tieu (co the doi sau khi khop lai)."""
         return self._track_id
+
+    @property
+    def anchor_id(self) -> Optional[int]:
+        """ID goc dang ghi nho (None neu khong co / co anchor_recovery tat)."""
+        return self._anchor_id
 
     @property
     def state(self) -> TrackState:
@@ -292,7 +333,8 @@ class MotionMemory:
 
         Chinh sach REIDENTIFYING (quyet dinh B): dung ID tracker cu quay lai
         duoc coi la match hop le. KHONG dung gate chuyen dong voi ID khac -
-        de danh cho appearance-based Re-ID sau nay.
+        de danh cho appearance-based Re-ID sau nay. Khi config.anchor_recovery:
+        nhan lai ID hien tai HOAC anchor (ID goc), van KHONG dung gate.
 
         Returns:
             MotionPrediction cua frame hien tai.
@@ -305,6 +347,12 @@ class MotionMemory:
         if prev_state is TrackState.REIDENTIFYING and reid_matched and observation is not None:
             self._accept(observation)
             return self._emit(observation.bbox, 1.0, RECOVER_REID_MATCHED)
+
+        anchor = self._find_anchor(observation, candidates)
+        if anchor is not None:
+            self._anchor_id = None
+            self._accept(anchor)
+            return self._emit(anchor.bbox, 1.0, RECOVER_ANCHOR_ID)
 
         observation, others = self._split_target(observation, candidates)
 
@@ -320,6 +368,13 @@ class MotionMemory:
         if prev_state is TrackState.LOST and others:
             match, gate_passed = self._gate(others)
             if match is not None:
+                if (
+                    self.config.anchor_recovery
+                    and self._anchor_id is None
+                    and self._track_id is not None
+                    and match.track_id != self._track_id
+                ):
+                    self._anchor_id = self._track_id
                 self._accept(match)
                 return self._emit(match.bbox, 1.0, RECOVER_MOTION_GATE, gate_passed)
 
@@ -341,9 +396,23 @@ class MotionMemory:
         self._state = TrackState.TRACKING
         self._frames_since_confirmed = 0
         self._track_id = None
+        self._anchor_id = None
         self._last_frame_idx = None
 
     # ---------------- noi bo ----------------
+
+    def _find_anchor(
+        self,
+        observation: Optional[Observation],
+        candidates: Optional[Sequence[Observation]],
+    ) -> Optional[Observation]:
+        """Track co ID = anchor trong frame nay (None neu tat / khong co anchor)."""
+        if not self.config.anchor_recovery or self._anchor_id is None:
+            return None
+        for obs in ([observation] if observation is not None else []) + list(candidates or ()):
+            if obs.track_id is not None and obs.track_id == self._anchor_id:
+                return obs
+        return None
 
     def _check_frame_idx(
         self, frame_idx: Optional[int], observation: Optional[Observation]
@@ -450,6 +519,7 @@ class MotionMemory:
             and k > cfg.lost_timeout_frames + cfg.reid_timeout_frames
         ):
             self._transition(TrackState.FAILED)
+            self._anchor_id = None  # FAILED la trang thai cuoi -> bo anchor
 
     def _transition(self, new_state: TrackState) -> None:
         self._state = new_state

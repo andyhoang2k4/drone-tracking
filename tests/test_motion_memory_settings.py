@@ -29,6 +29,9 @@ def test_repo_config_matches_dataclass_defaults():
     """configs/motion_memory.yaml khop mac dinh dataclass (gia tri khoi dau)."""
     choice = resolve_motion_memory_config(None, DEFAULT_MOTION_MEMORY_CONFIG)
     assert asdict(choice.config) == asdict(MotionMemoryConfig())
+    # anchor_recovery (them 2026-11-15) co y KHONG ghi vao file mac dinh de giu sha256 cua
+    # configs/motion_memory.yaml / motion_memory_tuned.yaml -> lay mac dinh dataclass (False).
+    assert choice.sources.pop("anchor_recovery") == "default"
     assert set(choice.sources.values()) == {"file"}
 
 
