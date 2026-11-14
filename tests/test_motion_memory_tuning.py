@@ -243,3 +243,21 @@ def test_final_tie_between_round1_and_round2_uses_error_then_default():
     res[mt.ROUND2_ID] = entry(yolo11={"correct": 120, "err": 5.0}, yolo26={"correct": 120, "err": 5.0})
     sel = mt.final_selection(rules(), res, winners)
     assert sel["conclusion"] == mt.CONCLUSION_KEEP_DEFAULT and "hoa ca diem va sai so" in sel["reason"]
+
+
+# ---------------- config that cua repo ----------------
+
+def test_repo_tuning_config_loads_and_matches_motion_memory_yaml():
+    import yaml
+
+    from src.utils.motion_memory_settings import resolve_motion_memory_config
+
+    data = yaml.safe_load((REPO_ROOT / "configs" / "motion_memory_tuning_dev.yaml").read_text(encoding="utf-8"))
+    r = mt.TuningRules.from_mapping(data)
+    assert r.group == "dev" and r.detectors == DETS and r.metrics_config_version == 2
+    assert r.min_improvement == mt.Fraction(1, 100)
+    base = asdict(resolve_motion_memory_config(None, REPO_ROOT / data["base_motion_memory_config"]).config)
+    mt.check_defaults(r, base)
+    assert [c["id"] for c in mt.round1_configs(r)] == R1_IDS
+    for c in mt.round1_configs(r):
+        mt.config_values(base, c["overrides"])          # moi cau hinh hop le voi MotionMemoryConfig
