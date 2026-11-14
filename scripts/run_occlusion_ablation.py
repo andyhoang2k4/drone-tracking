@@ -352,6 +352,42 @@ def evaluate_command(scen_dir: Path, run_dir: Path, metrics_config: Optional[Pat
     return cmd
 
 
+def aggregate_command(exp_dir: Path, index_path: Path, allow_incomplete: bool) -> list[str]:
+    cmd = [sys.executable, "-m", "src.evaluate", "aggregate",
+           "--exp-dir", str(exp_dir), "--index", str(index_path)]
+    if allow_incomplete:
+        cmd.append("--allow-incomplete")
+    return cmd
+
+
+def compare_command(baseline_dir: Path, memory_dir: Path, output: Path) -> list[str]:
+    return [sys.executable, "-m", "src.evaluate", "compare",
+            "--baseline", str(baseline_dir), "--memory", str(memory_dir), "--output", str(output)]
+
+
+def postprocess_scenario(
+    spec: RunSpec, scen_dir: Path, manifest: dict, tracks_log: Path, args: argparse.Namespace,
+    call: Callable[[list[str]], int],
+) -> tuple[str, str]:
+    """Hau ky MOT kich ban tren log track da co: run_pipeline (replay) + evaluate occlusion.
+
+    Tra ve (trang thai, nhan): "ran" | "recovered" (log pipeline da co, chi danh
+    gia lai) | "failed" (nhan kem ly do). Goi khi metrics.json chua co.
+    """
+    run_dir = spec.exp_dir / "scenarios" / scen_dir.name
+    label = f"{spec.exp_id}/{scen_dir.name}"
+    if (run_dir / "logs" / "pipeline.jsonl").is_file():
+        # Log da co (lan truoc bi ngat sau khi chay xong?) - chi danh gia lai.
+        if call(evaluate_command(scen_dir, run_dir, args.metrics_config)) == 0:
+            return "recovered", label
+        return "failed", f"{label} (log cu khong hop le - can xu ly tay)"
+    if call(pipeline_command(spec, scen_dir, manifest, tracks_log, args)) != 0:
+        return "failed", f"{label} (run_pipeline loi)"
+    if call(evaluate_command(scen_dir, run_dir, args.metrics_config)) != 0:
+        return "failed", f"{label} (evaluate loi)"
+    return "ran", label
+
+
 def default_runner(cmd: list[str]) -> int:
     return subprocess.run(cmd, cwd=str(REPO_ROOT)).returncode
 
@@ -441,34 +477,15 @@ def run_ablation(args: argparse.Namespace, runner: Runner = default_runner) -> R
 
             # 2. Hau ky baseline va Motion Memory tren CUNG log track.
             for spec in pending:
-                run_dir = spec.exp_dir / "scenarios" / scen_name
-                label = f"{spec.exp_id}/{scen_name}"
-                if (run_dir / "logs" / "pipeline.jsonl").is_file():
-                    # Log da co (lan truoc bi ngat sau khi chay xong?) - chi danh gia lai.
-                    if call(evaluate_command(scen_dir, run_dir, args.metrics_config)) == 0:
-                        report.recovered.append(label)
-                    else:
-                        report.failed.append(f"{label} (log cu khong hop le - can xu ly tay)")
-                        complete[spec.exp_id] = False
-                    continue
-                if call(pipeline_command(spec, scen_dir, manifest, tracks_log, args)) != 0:
-                    report.failed.append(f"{label} (run_pipeline loi)")
+                status, label = postprocess_scenario(spec, scen_dir, manifest, tracks_log, args, call)
+                getattr(report, status).append(label)
+                if status == "failed":
                     complete[spec.exp_id] = False
-                    continue
-                if call(evaluate_command(scen_dir, run_dir, args.metrics_config)) != 0:
-                    report.failed.append(f"{label} (evaluate loi)")
-                    complete[spec.exp_id] = False
-                    continue
-                report.ran.append(label)
 
         for spec in specs:
             if not complete[spec.exp_id]:
                 continue
-            cmd = [sys.executable, "-m", "src.evaluate", "aggregate",
-                   "--exp-dir", str(spec.exp_dir), "--index", str(index_path)]
-            if incomplete_ok:
-                cmd.append("--allow-incomplete")
-            if call(cmd) == 0:
+            if call(aggregate_command(spec.exp_dir, index_path, incomplete_ok)) == 0:
                 report.aggregated.append(spec.exp_id)
             else:
                 report.failed.append(f"{spec.exp_id} (aggregate loi)")
@@ -476,9 +493,7 @@ def run_ablation(args: argparse.Namespace, runner: Runner = default_runner) -> R
         base, mem = specs[0].exp_id, specs[1].exp_id
         if base in report.aggregated and mem in report.aggregated:
             out = args.output_root / mem / f"ablation_vs_{base}.json"
-            cmd = [sys.executable, "-m", "src.evaluate", "compare",
-                   "--baseline", str(args.output_root / base),
-                   "--memory", str(args.output_root / mem), "--output", str(out)]
+            cmd = compare_command(args.output_root / base, args.output_root / mem, out)
             if call(cmd) == 0:
                 report.compared.append(f"{base} vs {mem}")
             else:
