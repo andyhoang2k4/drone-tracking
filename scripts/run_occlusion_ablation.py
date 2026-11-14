@@ -42,6 +42,10 @@ metrics v2 (mac dinh --metrics-config configs/occlusion_metrics_v2.yaml):
       manifest.target_lock (khong tu configs/eval_visdrone.yaml);
     - evaluate dung metrics v2: kich ban chua khoa duoc dem rieng.
 Kich ban v1 (lan chay thu "timing"): --metrics-config configs/occlusion_metrics.yaml.
+
+Cot Motion Memory phu (--extra-motion-memory-config ten=file, lap lai duoc): moi cot la
+mot experiment <detector>_botsort_mm_<ten>_occl_<group>_<tag> hau ky tren CUNG log
+tracker (replay), so sanh rieng voi baseline. Khong co co nay -> hanh vi/ten nhu cu.
 Metrics v2 tren kich ban v1 (va nguoc lai) -> tu choi.
 
 Vi du (tren cloud)::
@@ -76,7 +80,9 @@ DEFAULT_METRICS_CONFIG = REPO_ROOT / "configs" / "occlusion_metrics_v2.yaml"
 Runner = Callable[[list[str]], int]
 
 
-def experiment_id(detector: str, motion_memory: bool, group: str, tag: str) -> str:
+def experiment_id(detector: str, motion_memory: bool, group: str, tag: str, mm_name: Optional[str] = None) -> str:
+    if mm_name:
+        return f"{detector}_botsort_mm_{mm_name}_occl_{group}_{tag}"
     return f"{detector}_botsort_{'mm_' if motion_memory else ''}occl_{group}_{tag}"
 
 
@@ -94,6 +100,8 @@ class RunSpec:
     motion_memory: bool
     exp_id: str
     exp_dir: Path
+    mm_config: Optional[Path] = None   # None -> args.motion_memory_config
+    mm_name: Optional[str] = None      # cot MM phu (--extra-motion-memory-config)
 
 
 @dataclass
@@ -148,6 +156,16 @@ def parse_detector(value: str) -> tuple[str, str]:
     return name, weights
 
 
+EXTRA_NAME_CHARS = set("abcdefghijklmnopqrstuvwxyz0123456789_")
+
+
+def parse_extra_mm(value: str) -> tuple[str, Path]:
+    name, sep, path = value.partition("=")
+    if not sep or not name or not path or not set(name) <= EXTRA_NAME_CHARS:
+        raise argparse.ArgumentTypeError(f"--extra-motion-memory-config can ten=file (ten a-z0-9_), nhan {value!r}")
+    return name, Path(path)
+
+
 def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--group", required=True, help="Nhom kich ban (dev | heldout)")
@@ -157,6 +175,8 @@ def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
     parser.add_argument("--scenario-root", type=Path, default=DEFAULT_SCENARIO_ROOT)
     parser.add_argument("--output-root", type=Path, default=REPO_ROOT / "experiments")
     parser.add_argument("--motion-memory-config", type=Path, default=DEFAULT_MM_CONFIG)
+    parser.add_argument("--extra-motion-memory-config", type=parse_extra_mm, action="append", default=[],
+                        metavar="TEN=FILE", help="Cot Motion Memory phu tren cung log tracker (lap lai duoc)")
     parser.add_argument("--metrics-config", type=Path, default=DEFAULT_METRICS_CONFIG,
                         help="Dinh nghia do do (mac dinh v2; kich ban v1: configs/occlusion_metrics.yaml)")
     parser.add_argument("--device", default=None)
@@ -170,6 +190,9 @@ def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
     names = [n for n, _ in args.detector]
     if len(set(names)) != len(names):
         parser.error("ten detector bi trung")
+    extra_names = [n for n, _ in args.extra_motion_memory_config]
+    if len(set(extra_names)) != len(extra_names):
+        parser.error("ten --extra-motion-memory-config bi trung")
     if args.limit_scenarios is not None and args.limit_scenarios < 1:
         parser.error("--limit-scenarios phai >= 1")
     return args
@@ -256,7 +279,8 @@ def experiment_config(
         },
         "motion_memory": {
             "enabled": spec.motion_memory,
-            "config": str(args.motion_memory_config) if spec.motion_memory else None,
+            "config": str(spec.mm_config or args.motion_memory_config) if spec.motion_memory else None,
+            **({"extra_name": spec.mm_name} if spec.mm_name else {}),
         },
         "scenarios": _scenarios_config(args, index_path, index),
         "metrics_config": metrics if metrics is not None else metrics_config_summary(args),
@@ -340,7 +364,7 @@ def pipeline_command(
         cmd += ["--gt-match-iou", str(lock["match_iou"]),
                 "--gt-max-search-frames", str(lock["max_search_frames"])]
     if spec.motion_memory:
-        cmd += ["--motion-memory", "--motion-memory-config", str(args.motion_memory_config)]
+        cmd += ["--motion-memory", "--motion-memory-config", str(spec.mm_config or args.motion_memory_config)]
     return cmd
 
 
@@ -422,6 +446,9 @@ def run_ablation(args: argparse.Namespace, runner: Runner = default_runner) -> R
         for mm in (False, True):
             exp = experiment_id(name, mm, args.group, args.tag)
             specs.append(RunSpec(name, weights, mm, exp, args.output_root / exp))
+        for extra, path in getattr(args, "extra_motion_memory_config", []) or []:
+            exp = experiment_id(name, True, args.group, args.tag, extra)
+            specs.append(RunSpec(name, weights, True, exp, args.output_root / exp, mm_config=path, mm_name=extra))
         tracks_dir = args.output_root / tracks_experiment_id(name, args.group, args.tag)
         detectors.append((name, weights, tracks_dir, specs))
     if not args.dry_run:
@@ -490,8 +517,11 @@ def run_ablation(args: argparse.Namespace, runner: Runner = default_runner) -> R
             else:
                 report.failed.append(f"{spec.exp_id} (aggregate loi)")
 
-        base, mem = specs[0].exp_id, specs[1].exp_id
-        if base in report.aggregated and mem in report.aggregated:
+        base = specs[0].exp_id
+        for mem_spec in specs[1:]:   # moi cot MM (mac dinh + phu) so voi baseline
+            mem = mem_spec.exp_id
+            if base not in report.aggregated or mem not in report.aggregated:
+                continue
             out = args.output_root / mem / f"ablation_vs_{base}.json"
             cmd = compare_command(args.output_root / base, args.output_root / mem, out)
             if call(cmd) == 0:
@@ -521,7 +551,7 @@ def print_timings(report: Report, args: argparse.Namespace) -> None:
         if values:
             print(f"  {KIND_LABELS.get(kind, kind)}: {len(values)} lan, tong {sum(values):.1f}, "
                   f"trung binh {sum(values) / len(values):.2f}")
-    # Uoc tinh: moi cap (detector, kich ban) chay moi = 1 src.track + 2 run_pipeline + 2 evaluate.
+    # Uoc tinh: moi cap (detector, kich ban) chay moi = 1 src.track + (1 + so cot MM) x (run_pipeline + evaluate).
     units = len(report.timings.get("track", []))
     if units:
         per_unit = sum(sum(report.timings.get(k, [])) for k in ("track", "pipeline", "occlusion")) / units

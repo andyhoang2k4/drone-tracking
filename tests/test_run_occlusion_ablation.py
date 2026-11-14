@@ -467,3 +467,44 @@ def test_metrics_version_must_match_scenario_version(env_v2, tmp_path):
             "--output-root", str(tmp_path / "e"), "--detector", "y=w.pt", "--dry-run"]
     with pytest.raises(ValueError, match="kich ban v1"):
         abl.main(args, FakeRunner())                        # mac dinh metrics v2 tren kich ban v1
+
+
+# ---------------- cot Motion Memory phu (--extra-motion-memory-config) ----------------
+
+def test_extra_mm_columns_share_tracks_and_compare_each(env_v2, tmp_path, capsys):
+    tmp, base, _ = env_v2
+    extra = tmp_path / "mm_lost25.yaml"
+    extra.write_text("motion_memory:\n  lost_timeout_frames: 25\n  anchor_recovery: true\n", encoding="utf-8")
+    args = base + ["--extra-motion-memory-config", f"anchor_lost25={extra}"]
+    assert abl.main(args + ["--dry-run"], FakeRunner()) == 0
+    out = capsys.readouterr().out
+    assert out.count(f"--motion-memory-config {extra}") == 2 * len(V2_CASES)
+    assert "run_pipeline 18" in out and "src.track 6" in out          # 3 cot x 2 det x 3 kich ban; tracker 1 lan
+    runner = FakeRunner()
+    assert abl.main(args, runner) == 0
+    assert runner.count("track") == 2 * len(V2_CASES)
+    exps = tmp / "experiments"
+    import yaml
+
+    for det in ("yolo11", "yolo26"):
+        mm = exps / f"{det}_botsort_mm_anchor_lost25_occl_dev_v2"
+        conf = yaml.safe_load((mm / "config.yaml").read_text())
+        assert conf["motion_memory"] == {"enabled": True, "config": str(extra), "extra_name": "anchor_lost25"}
+        assert (mm / "metrics.json").is_file()
+        assert (mm / f"ablation_vs_{det}_botsort_occl_dev_v2.json").is_file()
+        assert (exps / f"{det}_botsort_mm_occl_dev_v2" / f"ablation_vs_{det}_botsort_occl_dev_v2.json").is_file()
+        main_conf = yaml.safe_load((exps / f"{det}_botsort_mm_occl_dev_v2" / "config.yaml").read_text())
+        assert "extra_name" not in main_conf["motion_memory"]        # cot chinh: config.yaml nhu cu
+        ctx = json.loads((mm / "scenarios" / f"seqA__t{GT_ID}__d005__new_id" / "run_context.json").read_text())
+        assert ctx["motion_memory"]["config"]["lost_timeout_frames"] == 25
+        assert ctx["motion_memory"]["config"]["anchor_recovery"] is True
+
+
+def test_extra_mm_name_validation():
+    for bad in ("Tuned=x.yaml", "tuned", "=x.yaml", "a-b=x.yaml"):
+        with pytest.raises(SystemExit):
+            abl.parse_args(["--group", "dev", "--tag", "t", "--detector", "y=w.pt",
+                            "--extra-motion-memory-config", bad])
+    with pytest.raises(SystemExit):
+        abl.parse_args(["--group", "dev", "--tag", "t", "--detector", "y=w.pt",
+                        "--extra-motion-memory-config", "a=x.yaml", "--extra-motion-memory-config", "a=y.yaml"])
