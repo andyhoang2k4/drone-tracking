@@ -1,0 +1,59 @@
+# Sinh boi scripts/run_occlusion_ablation.py - khong sua sau khi da co ket qua.
+experiment_id: yolo26_botsort_tracks_occl_heldout_v2_001
+purpose: Log YOLO + BoT-SORT dung chung cho baseline va Motion Memory (replay)
+detector:
+  name: yolo26
+  weights: weights/eval/yolo26_best.pt
+tracker:
+  type: botsort
+  config: configs/botsort.yaml
+device: '0'
+scenarios:
+  group: heldout
+  index: data/occlusion_test_scenarios/v2/heldout/index.json
+  config_sha256: 1c02e6dd77afbdea3e8f76c5e6087a42989e14bfd64e42f18b154edb3c1ea396
+  seed: 20261113
+  count: 720
+  partial: false
+  limit_scenarios: null
+  config_version: 2
+  screening_sha256: 7ac20cefa6f5c862ae84abc42d8c5c90d8249ea97668562d0f3903b253392854
+  target_lock:
+    match_iou: 0.5
+    max_search_frames: 10
+    lock_confirm_frames: 3
+    lock_iou: 0.5
+    required_detectors:
+    - yolo11
+    - yolo26
+heldout:
+  plan:
+    path: configs/heldout_report_plan.yaml
+    sha256: ede00d887d952b382e6be6b9869fc66dac2ca495795da02b4ea78254f0c0a3c8
+    version: 1
+  plan_tag: v2_001
+  rerun_note: null
+  git:
+    commit: aa1299f794d6ce4a62b827b61b8b5ddbac874434
+    clean: true
+    clean_definition: 'sach <=> (1) `git status --porcelain --untracked-files=no`
+      rong: khong file DA TRACK nao bi sua/staged/xoa/doi ten so voi HEAD; (2) moi
+      file ke hoach tham chieu deu da track trong HEAD. File untracked va file bi
+      .gitignore (output, du lieu) KHONG tinh.'
+  weights_sha256:
+    yolo11: 82f0be26b04e3e4fdf09dea0b038a587aa01a262c380e6abab58afc751339fed
+    yolo26: 6b7223db8f0e8f16a18bb53d0c82ff48bd33902eb2100e9337142b2f63f11c3a
+  environment:
+    python: 3.12.3
+    platform: Linux-7.0.0-42-generic-x86_64-with-glibc2.39
+    hardware:
+      python: 3.12.3
+      platform: Linux-7.0.0-42-generic-x86_64-with-glibc2.39
+      cuda_available: true
+      cuda_version: '13.0'
+      gpu_name: NVIDIA GeForce RTX 5060 Ti
+    versions:
+      ultralytics: 8.4.174
+      torch: 2.14.1+cu130
+      opencv: 4.10.0
+  note: src.track chay tren may nay (GPU); replay MM chi dung CPU
