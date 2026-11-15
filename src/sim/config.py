@@ -39,6 +39,11 @@ class TargetConfig:
     reacquire_speed_px_s: float = 200.0
     reacquire_max_px: float = 200.0  # tran ban kinh gating, tranh bat nham nguoi khac
     history_len: int = 12
+    # Bo uoc luong muc tieu: "heuristic" (TargetManager, ngoai suy tam anh) hoac "motion_memory"
+    # (src/sim/mm_target.py dung src/motion_memory.py). Cac nguong *_timeout_s/reacquire_* chi dung cho heuristic.
+    estimator: str = "heuristic"
+    motion_memory_config: str = "configs/motion_memory.yaml"  # tuong doi theo thu muc chay (goc repo)
+    mm_frame_rate_hz: float = 30.0  # doi giay -> frame_idx cho MotionMemory (nguong cua no tinh theo frame)
 
 
 @dataclass

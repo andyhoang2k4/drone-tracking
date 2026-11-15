@@ -73,6 +73,7 @@ def session_record(args: argparse.Namespace, choice: Optional[ImgszChoice]) -> d
         "event": "session_start",
         "demo": bool(args.demo),
         "detector": detector_kind(args),
+        "estimator": None,  # dien trong main() sau khi doc configs/sim.yaml
         "video": str(args.video) if args.video else None,
         "weights": args.weights,
         "tracker_cfg": str(args.tracker_cfg),
@@ -128,7 +129,9 @@ def main(argv: Optional[list[str]] = None) -> None:
         from src.utils.logging_utils import JsonlLogger
 
         with JsonlLogger(args.log) as logger:
-            logger.write(session_record(args, choice))
+            record = session_record(args, choice)
+            record["estimator"] = cfg.target.estimator
+            logger.write(record)
             app.set_logger(logger)
             app.run()
     else:

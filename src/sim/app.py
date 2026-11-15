@@ -13,7 +13,7 @@ from .link import FlightLink
 from .messages import MessageBoard
 from .sources import FrameSource
 from .supervisor import FlightOutput, FlightSupervisor
-from .target_manager import TargetManager
+from .mm_target import build_target_manager
 from .types import FrameSize, RCInput
 from .virtual_radio import VirtualRadio
 
@@ -23,7 +23,7 @@ class SimApp:
                  link: FlightLink, radio: VirtualRadio) -> None:
         self.cfg, self.camera, self.detector, self.link, self.radio = cfg, camera, detector, link, radio
         self.board = MessageBoard()
-        self.manager = TargetManager(cfg.target)
+        self.manager = build_target_manager(cfg.target)
         self.supervisor = FlightSupervisor(cfg, self.board)
         self.view = CameraView(self.manager)
         self.last_output: FlightOutput | None = None

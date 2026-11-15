@@ -160,3 +160,24 @@ def test_target_state_is_shared_enum_from_motion_memory():
     from src.sim.types import TargetState
 
     assert TargetState is TrackState
+
+
+def test_demo_loop_runs_with_motion_memory_estimator():
+    from src.sim.mm_target import MotionMemoryTargetManager
+
+    h = Harness.__new__(Harness)
+    h.cfg = SimConfig()
+    h.cfg.target.estimator = "motion_memory"
+    h.w = DemoWorld(h.cfg)
+    h.radio = VirtualRadio(h.cfg.radio)
+    h.link = DemoLink(h.w)
+    h.app = SimApp(h.cfg, DemoCamera(h.w), DemoDetector(h.w), h.link, h.radio)
+    h.t, h.dt, h.states = 0.0, 1.0 / h.cfg.loop_hz, []
+    assert isinstance(h.app.manager, MotionMemoryTargetManager)
+    h.arm_and_hover()
+    h.lock_person(1)
+    h.radio.handle_key(ord("3"))
+    h.run(20.0)
+    seen = [s for _, s, _ in h.states]
+    assert TargetState.TRACKING in seen and TargetState.LOST in seen  # chay het vong lap, co mat muc tieu
+    assert h.app.last_output is not None
