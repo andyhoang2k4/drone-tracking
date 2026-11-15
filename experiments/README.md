@@ -150,3 +150,5 @@ dirty=true - khong co nghia code bi sua.
 | `<det>_botsort_tracks_occl_heldout_<tag>/config.yaml` (moi truong may chay tracker) | commit |
 | `heldout_report_<tag>/report.json` (`scripts/report_heldout.py`) | commit |
 | `*_occl_heldout_<tag>/scenarios/` | gitignore - sao luu |
+
+Ket qua v2_001: xem `heldout_report_v2_001/README.md` (cot quyet dinh mm_anchor: DAT tren yolo11 va yolo26).
