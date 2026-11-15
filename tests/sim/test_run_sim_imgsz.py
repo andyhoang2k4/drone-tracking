@@ -76,3 +76,64 @@ def test_main_demo_writes_session_record_first(tmp_path, monkeypatch):
     run_sim.main(["--demo", "--log", str(log)])
     first = json.loads(log.read_text(encoding="utf-8").splitlines()[0])
     assert first["event"] == "session_start" and first["demo"] is True
+
+
+def test_oracle_needs_no_weights_and_no_imgsz():
+    args = run_sim.parse_args(["--oracle"])
+    assert run_sim.resolve_detector_imgsz(args) is None
+    record = run_sim.session_record(args, None)
+    assert record["detector"] == "gz_oracle" and record["imgsz"] is None
+    assert record["imgsz_source"].startswith("oracle")
+
+
+def test_detector_kind_in_session_record(train_config):
+    assert run_sim.session_record(run_sim.parse_args(["--demo"]), None)["detector"] == "demo"
+    args = run_sim.parse_args(["--weights", "w.pt", "--train-config", str(train_config)])
+    assert run_sim.session_record(args, run_sim.resolve_detector_imgsz(args))["detector"] == "yolo_botsort"
+
+
+@pytest.mark.parametrize("argv", [["--oracle", "--video", "clip.mp4"], ["--oracle", "--demo"]])
+def test_oracle_rejects_incompatible_flags(argv):
+    with pytest.raises(SystemExit):
+        run_sim.parse_args(argv)
+
+
+def test_main_oracle_builds_gz_oracle_source(tmp_path, monkeypatch):
+    import src.sim.link as link_mod
+    import src.sim.oracle as oracle_mod
+    import src.sim.sources as sources_mod
+    from src.sim.app import SimApp
+
+    built = {}
+
+    class FakeCamera:
+        def __init__(self, topic):
+            built["camera_topic"] = topic
+
+    class FakeOracle:
+        def __init__(self, topic, label_classes, *, min_box_px, max_age_s):
+            built.update(oracle_topic=topic, label_classes=label_classes, min_box_px=min_box_px, max_age_s=max_age_s)
+
+        def detect(self, frame, t):
+            return []
+
+    class FakeLink:
+        def __init__(self, cfg, gimbal_enabled):
+            pass
+
+        def connect(self):
+            built["connected"] = True
+
+    monkeypatch.setattr(sources_mod, "GzCameraSource", FakeCamera)
+    monkeypatch.setattr(oracle_mod, "GzOracleDetectionSource", FakeOracle)
+    monkeypatch.setattr(link_mod, "PymavlinkLink", FakeLink)
+    monkeypatch.setattr(SimApp, "run", lambda self: None)
+    cfg = tmp_path / "sim.yaml"
+    cfg.write_text("oracle:\n  bbox_topic: /from/yaml\n  label_classes: {3: car}\n  max_age_s: 2.0\n", encoding="utf-8")
+    log = tmp_path / "sim.jsonl"
+    run_sim.main(["--oracle", "--config", str(cfg), "--gz-topic", "/cam", "--oracle-topic", "/cam/bbox",
+                  "--log", str(log)])
+    assert built == {"camera_topic": "/cam", "oracle_topic": "/cam/bbox", "label_classes": {3: "car"},
+                     "min_box_px": 0.0, "max_age_s": 2.0, "connected": True}
+    first = json.loads(log.read_text(encoding="utf-8").splitlines()[0])
+    assert first["detector"] == "gz_oracle" and first["weights"] is None
