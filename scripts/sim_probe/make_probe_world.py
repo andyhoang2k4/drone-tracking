@@ -6,9 +6,15 @@ Moi vat the co label rieng (plugin Label), file JSON di kem anh xa label -> loai
 
 Chi la cong cu probe: khong dung de danh gia motion memory, khong dung cho benchmark.
 
+Model tham chieu bang `model://<ten>` (person_walking, hatchback, suv, pickup), nen khi chay Gazebo phai dat
+GZ_SIM_RESOURCE_PATH toi thu muc chua cac model do. Tren cloud, thu muc nay la ~/sim_probe/models (ban tai zip tu
+Fuel, moi model mot thu muc <ten>/model.config); cache cua `gz fuel download` co them thu muc phien ban
+(<ten>/<so>/) nen khong dung truc tiep duoc.
+
 Vi du:
     python scripts/sim_probe/make_probe_world.py --out ~/sim_probe/runs/r1/world.sdf \
         --heights 10 20 30 50 80 --pitches 30 45 60 90
+    GZ_SIM_RESOURCE_PATH=~/sim_probe/models gz sim -s -r --headless-rendering ~/sim_probe/runs/r1/world.sdf
 """
 from __future__ import annotations
 
@@ -18,7 +24,8 @@ import math
 import random
 from pathlib import Path
 
-# loai vat the -> (model uri, nhom). Nhom dung de so khop voi lop VisDrone o eval_probe.py
+# loai vat the -> (model uri, nhom). Nhom (person/vehicle) ghi vao layout JSON de so khop voi lop VisDrone
+# (pedestrian/people <-> person, car/van/truck/bus <-> vehicle); script danh gia nam ngoai repo
 MODEL_KINDS = {
     "person": ("model://person_walking", "person"),
     "hatchback": ("model://hatchback", "vehicle"),
