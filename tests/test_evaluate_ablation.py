@@ -83,7 +83,7 @@ def test_with_real_run_pipeline_output(tmp_path: Path, monkeypatch):
         yield {"frame_idx": 0, "tracks": [{"track_id": 1, "bbox": [0, 0, 10, 10], "conf": 0.9, "cls": 0}]}
 
     monkeypatch.setattr(rp, "iter_tracks", fake_iter_tracks)
-    monkeypatch.setattr(MotionMemory, "update", lambda self, obs: _FakePrediction())
+    monkeypatch.setattr(MotionMemory, "update", lambda self, *args, **kwargs: _FakePrediction())
     common = ["--weights", "w.pt", "--source", "scn01.mp4", "--target-track-id", "1",
               "--tracker", str(REPO_ROOT / "configs" / "botsort.yaml"),
               "--output-root", str(tmp_path), "--imgsz", "960"]
@@ -103,3 +103,6 @@ class _FakePrediction:
     bbox = None
     confidence = 1.0
     frames_since_confirmed = 0
+    track_id = 1
+    recover_reason = None
+    gate_candidates_passed = None

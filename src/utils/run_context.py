@@ -43,6 +43,42 @@ def git_info(repo_root: Optional[Path] = None) -> dict[str, Any]:
     }
 
 
+# Dinh nghia "cay lam viec sach" cho lan chay heldout (khac git_info()["dirty"]:
+# `git status --porcelain` mac dinh tinh CA file untracked - vd chinh config.yaml /
+# metrics.json ma lan chay vua ghi - nen moi lan chay dev deu bi danh dau dirty).
+CLEAN_TREE_DEFINITION = (
+    "sach <=> (1) `git status --porcelain --untracked-files=no` rong: khong file DA TRACK nao bi "
+    "sua/staged/xoa/doi ten so voi HEAD; (2) moi file ke hoach tham chieu deu da track trong HEAD. "
+    "File untracked va file bi .gitignore (output, du lieu) KHONG tinh."
+)
+
+
+def git_tracked_changes(repo_root: Optional[Path] = None) -> Optional[list[str]]:
+    """Dong `git status --porcelain --untracked-files=no` (file da track bi doi); None neu khong co git."""
+    try:
+        out = subprocess.run(
+            ["git", "status", "--porcelain", "--untracked-files=no"],
+            cwd=str(repo_root) if repo_root else None, capture_output=True, text=True, check=True,
+        )
+    except (OSError, subprocess.CalledProcessError):
+        return None
+    return [line for line in out.stdout.splitlines() if line.strip()]
+
+
+def git_untracked_paths(paths: list[Union[str, Path]], repo_root: Optional[Path] = None) -> Optional[list[str]]:
+    """Cac duong dan CHUA track trong HEAD (rong = tat ca da track); None neu khong co git."""
+    missing = []
+    for path in paths:
+        try:
+            subprocess.run(["git", "cat-file", "-e", f"HEAD:{Path(path).as_posix()}"],
+                           cwd=str(repo_root) if repo_root else None, capture_output=True, check=True)
+        except OSError:
+            return None
+        except subprocess.CalledProcessError:
+            missing.append(str(path))
+    return missing
+
+
 def package_versions() -> dict[str, Optional[str]]:
     """Version cua cac package chinh. None neu chua cai."""
     versions: dict[str, Optional[str]] = {}

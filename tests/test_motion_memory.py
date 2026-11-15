@@ -101,8 +101,10 @@ def test_reidentifying_needs_reid_match(memory: StubMotionMemory) -> None:
         memory.update(None)
     assert memory.state is TrackState.REIDENTIFYING
 
-    # Detection don thuan khong du de thoat REIDENTIFYING
-    prediction = memory.update(make_observation(10))
+    # Detection khong ro ID khong du de thoat REIDENTIFYING. (Dung ID cu quay
+    # lai thi duoc - quyet dinh B, xem tests/test_motion_memory_reid.py.)
+    unknown_id = Observation(bbox=BBox(0.0, 0.0, 10.0, 10.0), frame_idx=10)
+    prediction = memory.update(unknown_id)
     assert prediction.state is TrackState.REIDENTIFYING
 
     prediction = memory.update(make_observation(11), reid_matched=True)
@@ -116,8 +118,9 @@ def test_reid_timeout_goes_failed(memory: StubMotionMemory) -> None:
         memory.update(None)
     assert memory.state is TrackState.REIDENTIFYING
 
-    # reid_timeout_frames=5
-    for _ in range(5):
+    # reid_timeout_frames=5: REIDENTIFYING dai dung 5 frame (frame vao state
+    # o tren + 4 frame nua)
+    for _ in range(4):
         assert memory.update(None).state is TrackState.REIDENTIFYING
 
     assert memory.update(None).state is TrackState.FAILED

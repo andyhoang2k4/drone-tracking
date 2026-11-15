@@ -35,6 +35,20 @@ Thumbs.db
 data/raw/**
 data/labeled/**
 data/occlusion_test_scenarios/**
+# Chi commit index.json cua tung nhom kich ban (danh sach kich ban, seed,
+# config_sha256); anh, manifest, annotations tung kich ban bi gitignore.
+!data/occlusion_test_scenarios/*/
+!data/occlusion_test_scenarios/*/index.json
+# Kich ban v2 (configs/occlusion_scenarios_v2.yaml): index.json + screening.json
+# cua tung nhom (nho, commit duoc); anh/manifest/annotations bi gitignore.
+!data/occlusion_test_scenarios/v2/*/
+!data/occlusion_test_scenarios/v2/*/index.json
+!data/occlusion_test_scenarios/v2/*/screening.json
+# Clip sach + log track cua screening (scripts/screen_occlusion_targets.py):
+# khong commit, sao luu cung kich ban.
+data/occlusion_screening/
+# Sinh boi scripts/prepare_visdrone.py, duong dan theo tung may
+data/dataset.yaml
 !data/**/.gitkeep
 !data/**/README.md
 # Sinh boi scripts/prepare_visdrone.py, chua duong dan tuyet doi cua tung may.
@@ -63,6 +77,10 @@ experiments/**/*.png
 experiments/**/*.jpg
 experiments/**/*.jpeg
 experiments/**/results.csv
+# Ablation occlusion (scripts/run_occlusion_ablation.py): ket qua tung kich ban
+# (hang nghin file) + log track khong commit; commit config.yaml, metrics.json
+# gop va ablation_vs_*.json o goc moi experiment.
+experiments/**/scenarios/
 
 # ---- Media sinh ra ----
 *.mp4

@@ -186,3 +186,31 @@ def test_dataset_info_on_real_manifests(tmp_path: Path, monkeypatch):
     # Chay du lai -> het partial
     assert gm.main(["--dataset-dir", str(out), "--splits", "train", "val"]) == 0
     assert dataset_info(yaml_path)["partial"] is False
+
+
+def _git_repo(tmp_path):
+    import subprocess
+
+    def git(*args):
+        subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@t", *args], cwd=tmp_path, check=True,
+                       capture_output=True)
+    git("init", "-q")
+    (tmp_path / "a.txt").write_text("a\n")
+    (tmp_path / ".gitignore").write_text("out/\n")
+    git("add", "a.txt", ".gitignore")
+    git("commit", "-q", "-m", "init")
+    return git
+
+
+def test_clean_tree_ignores_untracked_and_ignored_but_not_tracked_changes(tmp_path):
+    from src.utils.run_context import git_info, git_tracked_changes, git_untracked_paths
+
+    _git_repo(tmp_path)
+    (tmp_path / "new.json").write_text("{}")             # untracked (vd metrics.json vua ghi)
+    (tmp_path / "out").mkdir()
+    (tmp_path / "out" / "x").write_text("x")              # ignored
+    assert git_info(tmp_path)["dirty"] is True            # dinh nghia cu: untracked -> dirty
+    assert git_tracked_changes(tmp_path) == []            # dinh nghia heldout: van sach
+    (tmp_path / "a.txt").write_text("sua\n")
+    assert len(git_tracked_changes(tmp_path)) == 1
+    assert git_untracked_paths(["a.txt", "new.json"], tmp_path) == ["new.json"]

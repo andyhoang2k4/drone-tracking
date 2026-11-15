@@ -9,7 +9,14 @@ Trang thai file:
       conf/imgsz/classes (doc tu run_context.json cua scripts/run_pipeline.py).
     - CLI (`python -m src.evaluate`): DA implement - danh gia tung sequence
       VisDrone (val hoac test-dev) tu log cua src/track.py, ghi metrics JSON.
-    - `compute_occlusion_metrics()`: CHUA implement (roadmap buoc 4).
+    - `compute_occlusion_metrics()` + danh gia kich ban occlusion tu log
+      run_pipeline va manifest (`python -m src.evaluate occlusion|aggregate|
+      compare`): DA implement (roadmap buoc 4). Dinh nghia do do:
+      configs/occlusion_metrics.yaml (v1) va docstring compute_occlusion_metrics.
+    - Metrics v2 (configs/occlusion_metrics_v2.yaml, mac dinh tu 2026-11-14):
+      chi tinh ti le tren kich ban co muc tieu "khoa duoc truoc khi che"
+      (target_lock_for_run, tren log track replay dung chung), dem rieng kich
+      ban chua khoa; compare tu choi neu tap da khoa khac nhau. v1 giu nguyen.
 
 Vi du (moi sequence mot lan, log tao boi src/track.py voi --source la thu muc
 anh cua dung sequence do)::
@@ -124,7 +131,12 @@ class TrackingMetrics:
 
 @dataclass
 class OcclusionMetrics:
-    """Metric bat buoc cho moi kich ban occlusion (CLAUDE.md muc 12)."""
+    """Metric bat buoc cho moi kich ban occlusion (CLAUDE.md muc 12).
+
+    Dinh nghia chinh xac: docstring compute_occlusion_metrics va
+    configs/occlusion_metrics.yaml. Cac truong *_frames / *_sum la tu so,
+    mau so de gop nhieu kich ban bang cong gop.
+    """
 
     scenario_id: str = ""
     occlusion_frames: int = 0
@@ -133,7 +145,18 @@ class OcclusionMetrics:
     reidentified: bool = False
     time_to_reidentify_frames: Optional[int] = None
     mean_position_error_px: Optional[float] = None
-    per_frame_errors: list[float] = field(default_factory=list)
+    # sai so tam trong khoang che (None = frame do khong co output)
+    per_frame_errors: list[Optional[float]] = field(default_factory=list)
+    total_frames: int = 0
+    occlusion_start_frame: int = 0
+    occlusion_end_frame: int = 0
+    correct_occluded_frames: int = 0
+    occluded_frames_with_output: int = 0
+    position_error_sum_px: float = 0.0
+    target_acquired_before_occlusion: bool = False
+    first_correct_frame: Optional[int] = None
+    iou_threshold: float = 0.5
+    reid_min_consecutive_frames: int = 3
 
 
 # ---------------- ground truth + ghep cap (quy tac o docstring module) ----------------
@@ -340,14 +363,101 @@ def compute_occlusion_metrics(
     *,
     iou_threshold: float = 0.5,
     scenario_id: str = "",
+    reid_min_consecutive_frames: int = 3,
+    confirmed: Optional[Sequence[bool]] = None,
 ) -> OcclusionMetrics:
-    """Tinh metric cho mot kich ban occlusion.
+    """Tinh metric cho mot kich ban occlusion (dinh nghia giong
+    configs/occlusion_metrics.yaml).
 
-    `ground_truth` phai co gia tri o CA cac frame bi che khuat.
+    Args:
+        predictions: output cua pipeline moi frame (None = khong co output).
+        ground_truth: bbox GT cua muc tieu o MOI frame (ke ca frame bi che);
+            None o bat ky frame nao -> ValueError.
+        occluded_frames: True o frame bi che; phai la MOT doan lien tuc [a, b].
+        confirmed: True o frame ma output den tu detection cua tracker (khong
+            phai ngoai suy). None = moi output deu la detection (baseline).
 
-    CHUA IMPLEMENT - can chot dinh dang ground truth truoc (roadmap buoc 4).
+    Dinh nghia (frame k, M = reid_min_consecutive_frames):
+        dung(k)          = predictions[k] co va IoU(predictions[k], GT_k) >= iou_threshold
+        occlusion_frames = b - a + 1
+        correct_prediction_ratio = #{k in [a,b]: dung(k)} / occlusion_frames
+        longest_tracking_gap = doan dai nhat cac frame lien tiep khong dung,
+            tu frame dung dau tien den het; chua tung dung -> so frame
+        reidentified     = ton tai k > b voi dung(k..k+M-1) VA confirmed(k..k+M-1)
+                           (trong kich ban) - ngoai suy khong tinh la bat lai
+        time_to_reidentify_frames = k_min - b (>= 1), None neu khong
+        mean_position_error_px = trung binh center_error tren frame trong [a,b]
+            co output; None neu khong co frame nao
+        target_acquired_before_occlusion = ton tai k < a voi dung(k)
     """
-    raise NotImplementedError("Chua chot dinh dang ground truth - roadmap buoc 4.")
+    n = len(ground_truth)
+    if len(predictions) != n or len(occluded_frames) != n:
+        raise ValueError(
+            f"{scenario_id}: so frame khac nhau (pred {len(predictions)}, GT {n}, "
+            f"occluded {len(occluded_frames)})"
+        )
+    if any(g is None for g in ground_truth):
+        raise ValueError(f"{scenario_id}: ground truth thieu o mot so frame (bat buoc du moi frame)")
+    occ = [k for k, flag in enumerate(occluded_frames) if flag]
+    if not occ:
+        raise ValueError(f"{scenario_id}: khong co frame bi che")
+    a, b = occ[0], occ[-1]
+    if occ != list(range(a, b + 1)):
+        raise ValueError(f"{scenario_id}: frame bi che phai la mot doan lien tuc")
+    if reid_min_consecutive_frames < 1:
+        raise ValueError("reid_min_consecutive_frames phai >= 1")
+    if confirmed is None:
+        confirmed = [p is not None for p in predictions]
+    if len(confirmed) != n:
+        raise ValueError(f"{scenario_id}: confirmed khac so frame")
+
+    correct = [
+        p is not None and iou(p, g) >= iou_threshold for p, g in zip(predictions, ground_truth)
+    ]
+    metrics = OcclusionMetrics(
+        scenario_id=scenario_id,
+        occlusion_frames=b - a + 1,
+        total_frames=n,
+        occlusion_start_frame=a,
+        occlusion_end_frame=b,
+        iou_threshold=iou_threshold,
+        reid_min_consecutive_frames=reid_min_consecutive_frames,
+    )
+    metrics.correct_occluded_frames = sum(correct[a:b + 1])
+    metrics.correct_prediction_ratio = metrics.correct_occluded_frames / metrics.occlusion_frames
+    metrics.target_acquired_before_occlusion = any(correct[:a])
+
+    first = next((k for k, ok in enumerate(correct) if ok), None)
+    metrics.first_correct_frame = first
+    if first is None:
+        metrics.longest_tracking_gap = n
+    else:
+        run = longest = 0
+        for ok in correct[first:]:
+            run = 0 if ok else run + 1
+            longest = max(longest, run)
+        metrics.longest_tracking_gap = longest
+
+    m = reid_min_consecutive_frames
+    reacquired = [ok and bool(c) for ok, c in zip(correct, confirmed)]
+    for k in range(b + 1, n - m + 1):
+        if all(reacquired[k:k + m]):
+            metrics.reidentified = True
+            metrics.time_to_reidentify_frames = k - b
+            break
+
+    errors: list[Optional[float]] = []
+    for k in range(a, b + 1):
+        p = predictions[k]
+        errors.append(center_error(p, ground_truth[k]) if p is not None else None)
+    measured = [e for e in errors if e is not None]
+    metrics.per_frame_errors = errors
+    metrics.occluded_frames_with_output = len(measured)
+    metrics.position_error_sum_px = float(sum(measured))
+    metrics.mean_position_error_px = (
+        metrics.position_error_sum_px / len(measured) if measured else None
+    )
+    return metrics
 
 
 # ---------------- dieu kien so sanh cong bang (ablation, CLAUDE.md muc 12) ----------------
@@ -370,6 +480,8 @@ def load_pipeline_settings(exp_dir: Path) -> dict[str, Any]:
         settings["imgsz"] = inference["imgsz"]
     settings["motion_memory"] = config.get("motion_memory")
     settings["experiment_id"] = context.get("experiment_id")
+    # Che do replay: SHA-256 cua log track da dung (None khi chay YOLO truc tiep).
+    settings["tracks_sha256"] = (context.get("replay") or {}).get("tracks_sha256")
     return settings
 
 
@@ -381,6 +493,11 @@ def ablation_mismatches(
     for key in ABLATION_MUST_MATCH:
         if baseline.get(key) != with_memory.get(key):
             problems.append(f"{key} khac nhau: {baseline.get(key)!r} vs {with_memory.get(key)!r}")
+    if baseline.get("tracks_sha256") != with_memory.get("tracks_sha256"):
+        problems.append(
+            "hai lan chay khong dung cung log track (tracks_sha256 "
+            f"{baseline.get('tracks_sha256')!r} vs {with_memory.get('tracks_sha256')!r})"
+        )
     if baseline.get("imgsz") is None or with_memory.get("imgsz") is None:
         problems.append("thieu imgsz trong run_context (lan chay cu?) - khong xac nhan duoc")
     if baseline.get("motion_memory") or not with_memory.get("motion_memory"):
@@ -620,9 +737,588 @@ def parse_args(argv: Optional[list[str]] = None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
+# ---------------- kich ban occlusion: log run_pipeline + manifest ----------------
+
+# Mac dinh v2 (2026-11-14). v1 (configs/occlusion_metrics.yaml) giu de tai hien
+# lan chay thu "timing" tren kich ban v1: truyen --metrics-config ro rang.
+DEFAULT_OCCLUSION_METRICS_CONFIG = REPO_ROOT / "configs" / "occlusion_metrics_v2.yaml"
+OCCLUSION_METRICS_CONFIG_V1 = REPO_ROOT / "configs" / "occlusion_metrics.yaml"
+PIPELINE_LOG = Path("logs") / "pipeline.jsonl"
+SCENARIO_RUNS_DIR = "scenarios"   # experiments/<id>/scenarios/<ten kich ban>/
+SCENARIO_METRICS_NAME = "metrics.json"
+# Tham so phai giong nhau giua moi kich ban duoc gop vao mot bao cao.
+RUN_KEYS = ("weights", "tracker", "conf", "imgsz", "classes", "motion_memory")
+
+
+SUPPORTED_METRICS_VERSIONS = (1, 2)
+
+
+def load_occlusion_metrics_config(path: Union[str, Path]) -> dict[str, Any]:
+    from src.occlusion_scenarios import config_sha256
+
+    cfg = _load_yaml(Path(path))
+    for key in ("version", "correct_iou", "reid_min_consecutive_frames"):
+        if key not in cfg:
+            raise EvaluationError(f"{path}: thieu khoa {key}")
+    version = int(cfg["version"])
+    if version not in SUPPORTED_METRICS_VERSIONS:
+        raise EvaluationError(f"{path}: version {version} khong ho tro {SUPPORTED_METRICS_VERSIONS}")
+    return {
+        "version": version,
+        "correct_iou": float(cfg["correct_iou"]),
+        "reid_min_consecutive_frames": int(cfg["reid_min_consecutive_frames"]),
+        "path": str(path),
+        "config_sha256": config_sha256(Path(path).read_bytes()),
+    }
+
+
+def _read_replay_tracks(context: Mapping[str, Any]) -> list[dict[str, Any]]:
+    """Log track replay ma lan chay da dung (run_context.replay), kiem tra SHA-256."""
+    import hashlib
+
+    replay = context.get("replay") or {}
+    path = replay.get("tracks_log")
+    if not path:
+        raise EvaluationError(
+            "metrics v2 can lan chay dung --replay-tracks (tinh 'khoa duoc' tren log track dung chung)"
+        )
+    path = Path(str(path))
+    if not path.is_file():
+        raise EvaluationError(f"Khong thay log track replay {path}")
+    raw = path.read_bytes()
+    if hashlib.sha256(raw).hexdigest() != replay.get("tracks_sha256"):
+        raise EvaluationError(f"{path}: SHA-256 khac run_context.replay.tracks_sha256 (log da bi doi?)")
+    return [json.loads(line) for line in raw.decode("utf-8").splitlines() if line.strip()]
+
+
+def target_lock_for_run(
+    manifest: Mapping[str, Any],
+    context: Mapping[str, Any],
+    selection: Mapping[str, Any],
+) -> dict[str, Any]:
+    """'Khoa duoc truoc khi che' (metrics v2) cua mot lan chay tren kich ban v2.
+
+    Tinh lai tren log track replay bang evaluate_target_lock voi tham so trong
+    manifest.target_lock; doi chieu voi target_selection.json cua lan chay (lech
+    -> lan chay dung tham so chon muc tieu khac manifest -> loi).
+    """
+    from src.utils.gt_target import LockRule, evaluate_target_lock
+
+    lock_cfg = manifest.get("target_lock")
+    if not lock_cfg:
+        raise EvaluationError(
+            f"{manifest.get('scenario_id')}: manifest khong co target_lock - metrics v2 chi dung cho "
+            "kich ban v2 (configs/occlusion_scenarios_v2.yaml); kich ban v1 dung "
+            "--metrics-config configs/occlusion_metrics.yaml"
+        )
+    first_frame = int(manifest.get("first_frame", 1))
+    gt_boxes = {int(r["frame_idx"]) + first_frame: BBox(*r["bbox"]) for r in manifest["ground_truth"]}
+    a = int(lock_cfg["occlusion_start_frame_idx"])
+    if a != int(manifest["occlusion"]["start_frame_idx"]):
+        raise EvaluationError("target_lock.occlusion_start_frame_idx khac occlusion.start_frame_idx")
+    lock = evaluate_target_lock(
+        _read_replay_tracks(context), gt_boxes, LockRule.from_mapping(lock_cfg), a,
+        first_frame=first_frame, gt_target_id=manifest["target"]["gt_target_id"],
+    )
+    run_frame = selection.get("selected_frame_idx")
+    run_id = selection.get("selected_track_id") if run_frame is not None and run_frame < a else None
+    rule = lock["rule"]
+    if (selection.get("match_iou"), selection.get("max_search_frames")) != (
+        rule["match_iou"], rule["max_search_frames"]
+    ):
+        raise EvaluationError(
+            f"Lan chay chon muc tieu voi match_iou={selection.get('match_iou')}, "
+            f"max_search_frames={selection.get('max_search_frames')} khac manifest.target_lock {rule}"
+        )
+    if run_id != lock["selection"]["selected_track_id"]:
+        raise EvaluationError(
+            f"Track chon boi lan chay ({run_id}) khac track tinh lai tu log replay "
+            f"({lock['selection']['selected_track_id']})"
+        )
+    return lock
+
+
+def read_pipeline_log(path: Path) -> list[dict[str, Any]]:
+    """Log run_pipeline -> danh sach ban ghi theo frame_idx 0..N-1 (bat buoc lien tuc)."""
+    if not Path(path).is_file():
+        raise EvaluationError(f"Khong thay log {path}")
+    rows = [json.loads(line) for line in Path(path).read_text(encoding="utf-8").splitlines() if line.strip()]
+    indices = [r.get("frame_idx") for r in rows]
+    if indices != list(range(len(rows))):
+        raise EvaluationError(
+            f"{path}: frame_idx phai la 0..N-1 lien tuc, khong trung (log bi ghi noi hoac thieu frame?)"
+        )
+    return rows
+
+
+def pipeline_outputs(
+    rows: Sequence[Mapping[str, Any]],
+    motion_memory: bool,
+    selection: Mapping[str, Any],
+) -> tuple[list[Optional[BBox]], list[Optional[int]], list[bool]]:
+    """(output bbox, track ID muc tieu, output xac nhan) moi frame - dinh
+    nghia "output" va "output xac nhan" o configs/occlusion_metrics.yaml."""
+    boxes: list[Optional[BBox]] = []
+    ids: list[Optional[int]] = []
+    confirmed: list[bool] = []
+    baseline_id = selection.get("selected_track_id", selection.get("target_track_id"))
+    for row in rows:
+        if motion_memory:
+            raw = row.get("predicted_bbox")
+            boxes.append(BBox(*raw) if raw else None)
+            ids.append(row.get("track_id") if raw else None)
+            confirmed.append(bool(raw) and row.get("state") == "TRACKING")
+        else:
+            raw = row.get("tracker_bbox")
+            boxes.append(BBox(*raw) if raw else None)
+            ids.append(baseline_id if raw else None)
+            confirmed.append(bool(raw))
+    return boxes, ids, confirmed
+
+
+def evaluate_occlusion_run(
+    scenario_dir: Union[str, Path],
+    run_dir: Union[str, Path],
+    metrics_config: Mapping[str, Any],
+) -> dict[str, Any]:
+    """Danh gia mot lan chay run_pipeline tren mot kich ban -> dict metrics."""
+    from src.occlusion_scenarios import (
+        frame_order_problems,
+        load_manifest,
+        manifest_ground_truth,
+        occluded_flags,
+    )
+
+    scenario_dir, run_dir = Path(scenario_dir), Path(run_dir)
+    manifest = load_manifest(scenario_dir)
+    context_path = run_dir / "run_context.json"
+    selection_path = run_dir / "target_selection.json"
+    for p in (context_path, selection_path):
+        if not p.is_file():
+            raise EvaluationError(f"Khong thay {p} (do scripts/run_pipeline.py ghi)")
+    context = json.loads(context_path.read_text(encoding="utf-8"))
+    selection = json.loads(selection_path.read_text(encoding="utf-8"))
+    config = context.get("config") or {}
+    warnings: list[str] = []
+
+    source_parts = Path(str(config.get("source", ""))).parts[-2:]
+    if tuple(source_parts) != (manifest["name"], "images"):
+        raise EvaluationError(
+            f"Lan chay dung source={config.get('source')!r}, khong phai {manifest['name']}/images"
+        )
+    gt_id = manifest["target"]["gt_target_id"]
+    if selection.get("mode") == "gt":
+        if selection.get("gt_target_id") != gt_id:
+            raise EvaluationError(
+                f"target_selection.gt_target_id={selection.get('gt_target_id')} khac manifest {gt_id}"
+            )
+    else:
+        warnings.append("muc tieu chon bang --target-track-id: khong kiem chung duoc la dung muc tieu GT")
+
+    rows = read_pipeline_log(run_dir / PIPELINE_LOG)
+    if len(rows) != int(manifest["frames"]):
+        raise EvaluationError(
+            f"Log co {len(rows)} frame, manifest co {manifest['frames']} - log chua chay het?"
+        )
+    order = frame_order_problems([r.get("path") for r in rows], scenario_dir)
+    if order:
+        raise EvaluationError(
+            "Thu tu anh trong log khong khop ten file da sap xep cua kich ban:\n  "
+            + "\n  ".join(order)
+        )
+    motion_memory = bool(config.get("motion_memory"))
+    boxes, ids, confirmed = pipeline_outputs(rows, motion_memory, selection)
+    gt = manifest_ground_truth(manifest)
+    metrics = compute_occlusion_metrics(
+        boxes, gt, occluded_flags(manifest),
+        iou_threshold=metrics_config["correct_iou"],
+        scenario_id=manifest["scenario_id"],
+        reid_min_consecutive_frames=metrics_config["reid_min_consecutive_frames"],
+        confirmed=confirmed,
+    )
+
+    a = metrics.occlusion_start_frame
+    correct_before = [
+        k for k in range(a) if boxes[k] is not None and iou(boxes[k], gt[k]) >= metrics.iou_threshold
+    ]
+    id_before = ids[correct_before[-1]] if correct_before else None
+    reid_frame = (
+        metrics.occlusion_end_frame + metrics.time_to_reidentify_frames
+        if metrics.reidentified else None
+    )
+    id_at_reid = ids[reid_frame] if reid_frame is not None else None
+    recovery = {
+        "track_id_before_occlusion": id_before,
+        "reidentify_frame": reid_frame,
+        "track_id_at_reidentify": id_at_reid,
+        "reidentified_with_new_track_id": (
+            bool(metrics.reidentified and id_before is not None and id_at_reid != id_before)
+        ),
+        "recover_reasons": sorted(
+            {r["recover_reason"] for r in rows if r.get("recover_reason")}
+        ) if motion_memory else [],
+    }
+
+    from src.utils.run_context import git_info
+
+    lock_result: Optional[dict[str, Any]] = None
+    if int(metrics_config["version"]) >= 2:
+        lock_result = target_lock_for_run(manifest, context, selection)
+        recovery["target_locked_at_occlusion"] = bool(lock_result["locked"])
+
+    occ = manifest["occlusion"]
+    return {
+        "scenario_id": manifest["scenario_id"],
+        "scenario": {
+            "name": manifest["name"],
+            "group": manifest["group"],
+            "sequence": manifest["source"]["sequence"],
+            "gt_target_id": gt_id,
+            "duration_frames": occ["duration_frames"],
+            "occluder": occ["occluder"],
+            "coverage": occ["coverage"],
+            "texture": occ["texture"],
+            "config_sha256": manifest.get("config_sha256"),
+            "config_version": manifest.get("config_version"),
+            "scenario_dir": str(scenario_dir),
+        },
+        "run": {
+            "run_dir": str(run_dir),
+            "experiment_id": context.get("experiment_id"),
+            **{k: config.get(k) for k in RUN_KEYS},
+            "motion_memory_config": (context.get("motion_memory") or {}).get("config"),
+            "git_commit": (context.get("git") or {}).get("commit"),
+            "tracks_sha256": (context.get("replay") or {}).get("tracks_sha256"),
+            "git_dirty": (context.get("git") or {}).get("dirty"),
+            "versions": context.get("versions"),
+        },
+        "target_selection": selection,
+        **({"target_lock": lock_result} if lock_result is not None else {}),
+        "metrics_config": dict(metrics_config),
+        "metrics": {**asdict(metrics), **recovery},
+        "warnings": warnings,
+        "git": git_info(REPO_ROOT),
+        "evaluated_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+    }
+
+
+def _pool(items: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
+    """Gop metrics nhieu kich ban bang CONG GOP tu so / mau so."""
+    ms = [it["metrics"] for it in items]
+    n = len(ms)
+    occ = sum(m["occlusion_frames"] for m in ms)
+    correct = sum(m["correct_occluded_frames"] for m in ms)
+    with_output = sum(m["occluded_frames_with_output"] for m in ms)
+    err_sum = sum(m["position_error_sum_px"] for m in ms)
+    reid = [m for m in ms if m["reidentified"]]
+    ttr = sorted(m["time_to_reidentify_frames"] for m in reid)
+    gaps = [m["longest_tracking_gap"] for m in ms]
+    return {
+        "scenarios": n,
+        "occlusion_frames": occ,
+        "correct_occluded_frames": correct,
+        "correct_prediction_ratio": correct / occ if occ else None,
+        "occluded_frames_with_output": with_output,
+        "mean_position_error_px": err_sum / with_output if with_output else None,
+        "reidentified": len(reid),
+        "reidentification_failed": n - len(reid),
+        "reidentification_rate": len(reid) / n if n else None,
+        "reidentified_with_new_track_id": sum(1 for m in ms if m["reidentified_with_new_track_id"]),
+        "mean_time_to_reidentify_frames": sum(ttr) / len(ttr) if ttr else None,
+        "max_time_to_reidentify_frames": ttr[-1] if ttr else None,
+        "longest_tracking_gap_max": max(gaps) if gaps else None,
+        "longest_tracking_gap_mean": sum(gaps) / n if n else None,
+        "target_not_acquired_before_occlusion": sum(
+            1 for m in ms if not m["target_acquired_before_occlusion"]
+        ),
+    }
+
+
+def _is_locked(item: Mapping[str, Any]) -> bool:
+    value = item["metrics"].get("target_locked_at_occlusion")
+    if value is None:
+        raise EvaluationError(
+            f"{item.get('scenario_id')}: thieu target_locked_at_occlusion (metrics v1?) - "
+            "khong gop voi metrics v2"
+        )
+    return bool(value)
+
+
+def _target_key(item: Mapping[str, Any]) -> tuple[str, Any]:
+    scen = item["scenario"]
+    return (str(scen.get("sequence")), scen.get("gt_target_id"))
+
+
+def _pool_v2(items: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
+    """Gop metrics v2: moi ti le/tong/gap/time-to-reidentify CHI tren kich ban da
+    khoa truoc khi che; kich ban chua khoa duoc dem va liet ke rieng."""
+    locked = [it for it in items if _is_locked(it)]
+    not_locked = [it for it in items if not _is_locked(it)]
+    core = _pool(locked)
+    core.pop("scenarios")
+    per_sequence: dict[str, dict[str, Any]] = {}
+    for it in items:
+        seq = str(it["scenario"].get("sequence"))
+        row = per_sequence.setdefault(
+            seq, {"scenarios_total": 0, "scenarios_evaluated": 0, "_targets": set(), "_locked": set()}
+        )
+        row["scenarios_total"] += 1
+        row["_targets"].add(_target_key(it))
+        if _is_locked(it):
+            row["scenarios_evaluated"] += 1
+            row["_locked"].add(_target_key(it))
+    for row in per_sequence.values():
+        row["targets_total"] = len(row.pop("_targets"))
+        row["targets_evaluated"] = len(row.pop("_locked"))
+    return {
+        "scenarios_total": len(items),
+        "scenarios_evaluated": len(locked),
+        "scenarios_not_locked": len(not_locked),
+        "not_locked_scenario_ids": sorted(it["scenario_id"] for it in not_locked),
+        "independent_targets": len({_target_key(it) for it in locked}),
+        "independent_sequences": len({_target_key(it)[0] for it in locked}),
+        "per_sequence": dict(sorted(per_sequence.items())),
+        **core,
+    }
+
+
+def _provenance(items: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
+    """Commit git / version package cua cac lan chay duoc gop (CLAUDE.md muc 14)."""
+    runs = [it["run"] for it in items]
+    versions = {json.dumps(r.get("versions"), sort_keys=True) for r in runs}
+    return {
+        "git_commits": sorted({str(r.get("git_commit")) for r in runs}),
+        "git_dirty_runs": sum(1 for r in runs if r.get("git_dirty")),
+        "versions": [json.loads(v) for v in sorted(versions)],
+        "tracks_logs": sum(1 for r in runs if r.get("tracks_sha256")),
+        "scenario_config_sha256": sorted({str(it["scenario"].get("config_sha256")) for it in items}),
+        "metrics_config_sha256": sorted({str(it["metrics_config"].get("config_sha256")) for it in items}),
+    }
+
+
+V2_NOTE = (
+    "metrics v2: moi ti le/tong/gap/time-to-reidentify chi tinh tren kich ban co muc tieu khoa "
+    "duoc truoc khi che (target_locked_at_occlusion); kich ban chua khoa dem rieng. Ket qua co "
+    "dieu kien tren muc tieu ma ca hai detector khoa duoc (screening) - thien lech ve muc tieu de."
+)
+
+
+def aggregate_occlusion_metrics(items: Sequence[Mapping[str, Any]]) -> dict[str, Any]:
+    """Gop nhieu kich ban cua CUNG mot cau hinh chay, CUNG mot nhom."""
+    if not items:
+        raise EvaluationError("Khong co kich ban nao de gop")
+    groups = {it["scenario"]["group"] for it in items}
+    if len(groups) != 1:
+        raise EvaluationError(f"Khong gop nhieu nhom vao mot bao cao: {sorted(groups)}")
+    for key in RUN_KEYS:
+        values = {json.dumps(it["run"].get(key), sort_keys=True) for it in items}
+        if len(values) != 1:
+            raise EvaluationError(f"Cac kich ban khac {key}: {sorted(values)} - khong gop duoc")
+    mm_cfgs = {json.dumps(it["run"].get("motion_memory_config"), sort_keys=True) for it in items}
+    if len(mm_cfgs) != 1:
+        raise EvaluationError("Cac kich ban dung tham so Motion Memory khac nhau - khong gop duoc")
+    metric_cfgs = {
+        (it["metrics_config"]["version"], it["metrics_config"]["correct_iou"],
+         it["metrics_config"]["reid_min_consecutive_frames"],
+         str(it["metrics_config"].get("config_sha256")))
+        for it in items
+    }
+    if len(metric_cfgs) != 1:
+        raise EvaluationError(f"Cac kich ban dung dinh nghia do do khac nhau: {sorted(metric_cfgs)}")
+    version = int(items[0]["metrics_config"]["version"])
+    pool = _pool_v2 if version >= 2 else _pool
+
+    def by(key: str) -> dict[str, Any]:
+        buckets: dict[Any, list] = {}
+        for it in items:
+            buckets.setdefault(it["scenario"][key], []).append(it)
+        return {str(k): pool(v) for k, v in sorted(buckets.items())}
+
+    first = items[0]
+    result = {
+        "group": groups.pop(),
+        "run": {k: first["run"].get(k) for k in RUN_KEYS},
+        "motion_memory_config": first["run"].get("motion_memory_config"),
+        "metrics_config": first["metrics_config"],
+        # Metrics tung kich ban khong commit (.gitignore) -> giu nguon goc o ban gop.
+        "provenance": _provenance(items),
+        "overall": pool(items),
+        "by_duration_frames": by("duration_frames"),
+        "by_occluder": by("occluder"),
+        "scenario_ids": sorted(it["scenario_id"] for it in items),
+    }
+    if version >= 2:
+        result["note"] = V2_NOTE
+    return result
+
+
+def load_scenario_metrics(exp_dir: Path) -> dict[str, dict[str, Any]]:
+    """{ten kich ban: metrics} tu experiments/<id>/scenarios/*/metrics.json."""
+    root = Path(exp_dir) / SCENARIO_RUNS_DIR
+    if not root.is_dir():
+        raise EvaluationError(f"Khong thay {root}")
+    out = {}
+    for path in sorted(root.glob(f"*/{SCENARIO_METRICS_NAME}")):
+        out[path.parent.name] = json.loads(path.read_text(encoding="utf-8"))
+    return out
+
+
+def _check_complete(found: Mapping[str, Any], index_path: Optional[Path], allow_incomplete: bool) -> dict:
+    if index_path is None:
+        if not allow_incomplete:
+            raise EvaluationError("Can --index (index.json cua nhom kich ban) hoac --allow-incomplete")
+        return {"index": None, "missing": [], "complete": False}
+    index = json.loads(Path(index_path).read_text(encoding="utf-8"))
+    expected = set(index["scenarios"])
+    missing = sorted(expected - set(found))
+    extra = sorted(set(found) - expected)
+    if extra:
+        raise EvaluationError(f"Co metrics cua kich ban khong thuoc index: {extra[:5]}")
+    if missing and not allow_incomplete:
+        raise EvaluationError(
+            f"Thieu metrics cua {len(missing)} kich ban (vd {missing[:3]}) - lan chay that bai cung "
+            "phai co mat; dung --allow-incomplete de gop mot phan (danh dau incomplete)"
+        )
+    complete = not missing and not index.get("partial", False)
+    return {"index": str(index_path), "missing": missing, "complete": complete,
+            "index_partial": bool(index.get("partial", False))}
+
+
+def compare_ablation(baseline_dir: Path, memory_dir: Path) -> dict[str, Any]:
+    """So sanh co/khong Motion Memory tren cung kich ban. Tu choi neu bat ky cap
+    kich ban nao khac weights/source/tracker/conf/imgsz/classes (ablation_mismatches)."""
+    base = load_scenario_metrics(baseline_dir)
+    mem = load_scenario_metrics(memory_dir)
+    if set(base) != set(mem):
+        raise EvaluationError(
+            f"Hai experiment khong cung tap kich ban: chi baseline {sorted(set(base) - set(mem))[:3]}, "
+            f"chi memory {sorted(set(mem) - set(base))[:3]}"
+        )
+    problems: list[str] = []
+    warnings: list[str] = []
+    for name in sorted(base):
+        b_run = Path(baseline_dir) / SCENARIO_RUNS_DIR / name
+        m_run = Path(memory_dir) / SCENARIO_RUNS_DIR / name
+        for p in ablation_mismatches(load_pipeline_settings(b_run), load_pipeline_settings(m_run)):
+            problems.append(f"{name}: {p}")
+        b_sel = base[name]["target_selection"].get("selected_track_id")
+        m_sel = mem[name]["target_selection"].get("selected_track_id")
+        if b_sel != m_sel:
+            warnings.append(f"{name}: track muc tieu duoc chon khac nhau ({b_sel} vs {m_sel})")
+    if problems:
+        raise EvaluationError("Khong so sanh cong bang duoc:\n  " + "\n  ".join(problems[:20]))
+    b_agg = aggregate_occlusion_metrics(list(base.values()))
+    m_agg = aggregate_occlusion_metrics(list(mem.values()))
+    if (b_agg["metrics_config"]["version"], b_agg["metrics_config"].get("config_sha256")) != (
+        m_agg["metrics_config"]["version"], m_agg["metrics_config"].get("config_sha256")
+    ):
+        raise EvaluationError("Hai experiment dung dinh nghia do do khac version/config")
+    result = {
+        "baseline_experiment": str(baseline_dir),
+        "memory_experiment": str(memory_dir),
+        "scenarios": len(base),
+        "baseline": b_agg,
+        "memory": m_agg,
+        "warnings": warnings,
+    }
+    if int(b_agg["metrics_config"]["version"]) >= 2:
+        differ = sorted(n for n in base if _is_locked(base[n]) != _is_locked(mem[n]))
+        if differ:
+            raise EvaluationError(
+                f"Tap kich ban da khoa khac nhau giua baseline va Motion Memory ({len(differ)} kich "
+                f"ban, vd {differ[:3]}) - khong so sanh cong bang duoc"
+            )
+        result["scenarios_evaluated"] = sum(1 for n in base if _is_locked(base[n]))
+        result["scenarios_not_locked"] = len(base) - result["scenarios_evaluated"]
+        result["note"] = V2_NOTE
+    return result
+
+
+def default_metrics_config(scenario_dir: Path, given: Optional[Path]) -> Path:
+    """--metrics-config da cho, hoac chon theo manifest (v2 neu co target_lock)."""
+    if given is not None:
+        return given
+    from src.occlusion_scenarios import load_manifest
+
+    manifest = load_manifest(scenario_dir)
+    return DEFAULT_OCCLUSION_METRICS_CONFIG if manifest.get("target_lock") else OCCLUSION_METRICS_CONFIG_V1
+
+
+def _occlusion_cli(argv: list[str]) -> int:
+    from src.utils.logging_utils import write_json
+
+    parser = argparse.ArgumentParser(
+        prog="python -m src.evaluate",
+        description="Do do kich ban occlusion (mac dinh configs/occlusion_metrics_v2.yaml; "
+                    "v1: configs/occlusion_metrics.yaml)",
+    )
+    sub = parser.add_subparsers(dest="command", required=True)
+    one = sub.add_parser("occlusion", help="Danh gia mot lan chay tren mot kich ban")
+    one.add_argument("--scenario-dir", type=Path, required=True)
+    one.add_argument("--run-dir", type=Path, required=True, help="Thu muc --output-root/<experiment-id> cua run_pipeline")
+    one.add_argument("--output", type=Path, default=None, help="Mac dinh <run-dir>/metrics.json")
+    one.add_argument("--metrics-config", type=Path, default=None,
+                     help="Bo trong = theo manifest: kich ban v2 (co target_lock) -> "
+                          "configs/occlusion_metrics_v2.yaml, kich ban v1 -> configs/occlusion_metrics.yaml")
+
+    agg = sub.add_parser("aggregate", help="Gop metrics cac kich ban cua mot experiment")
+    agg.add_argument("--exp-dir", type=Path, required=True)
+    agg.add_argument("--index", type=Path, default=None, help="index.json cua nhom kich ban")
+    agg.add_argument("--allow-incomplete", action="store_true")
+    agg.add_argument("--output", type=Path, default=None, help="Mac dinh <exp-dir>/metrics.json")
+
+    cmp_ = sub.add_parser("compare", help="So sanh co/khong Motion Memory (ablation)")
+    cmp_.add_argument("--baseline", type=Path, required=True)
+    cmp_.add_argument("--memory", type=Path, required=True)
+    cmp_.add_argument("--output", type=Path, required=True)
+
+    args = parser.parse_args(argv)
+    if args.command == "occlusion":
+        result = evaluate_occlusion_run(
+            args.scenario_dir, args.run_dir,
+            load_occlusion_metrics_config(default_metrics_config(args.scenario_dir, args.metrics_config)),
+        )
+        out = args.output or args.run_dir / SCENARIO_METRICS_NAME
+        write_json(out, result)
+        m = result["metrics"]
+        print(f"{result['scenario_id']}: dung {m['correct_occluded_frames']}/{m['occlusion_frames']} "
+              f"frame che, reid={m['reidentified']} (sau {m['time_to_reidentify_frames']} frame)")
+        print(f"Da ghi: {out}")
+    elif args.command == "aggregate":
+        found = load_scenario_metrics(args.exp_dir)
+        completeness = _check_complete(found, args.index, args.allow_incomplete)
+        result = {**aggregate_occlusion_metrics(list(found.values())), "completeness": completeness}
+        out = args.output or args.exp_dir / SCENARIO_METRICS_NAME
+        write_json(out, result)
+        o = result["overall"]
+        if "scenarios_total" in o:  # metrics v2
+            print(f"Gop {o['scenarios_total']} kich ban: {o['scenarios_evaluated']} da khoa (tinh ti le), "
+                  f"{o['scenarios_not_locked']} chua khoa (dem rieng); {o['independent_targets']} muc "
+                  f"tieu, {o['independent_sequences']} sequence; complete={completeness['complete']}")
+        else:
+            print(f"Gop {o['scenarios']} kich ban, complete={completeness['complete']}")
+        print(f"Da ghi: {out}")
+    else:
+        result = compare_ablation(args.baseline, args.memory)
+        write_json(args.output, result)
+        for w in result["warnings"]:
+            print(f"CANH BAO: {w}")
+        print(f"So sanh {result['scenarios']} kich ban. Da ghi: {args.output}")
+    return 0
+
+
+OCCLUSION_COMMANDS = ("occlusion", "aggregate", "compare")
+
+
 def main(argv: Optional[list[str]] = None) -> int:
     from src.utils.inference_settings import config_conf
     from src.utils.logging_utils import write_json
+
+    import sys
+
+    raw_argv = list(sys.argv[1:] if argv is None else argv)
+    if raw_argv and raw_argv[0] in OCCLUSION_COMMANDS:
+        return _occlusion_cli(raw_argv)
 
     args = parse_args(argv)
     metrics = evaluate_sequence(

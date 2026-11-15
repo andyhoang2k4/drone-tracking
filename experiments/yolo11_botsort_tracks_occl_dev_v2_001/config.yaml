@@ -1,0 +1,28 @@
+# Sinh boi scripts/run_occlusion_ablation.py - khong sua sau khi da co ket qua.
+experiment_id: yolo11_botsort_tracks_occl_dev_v2_001
+purpose: Log YOLO + BoT-SORT dung chung cho baseline va Motion Memory (replay)
+detector:
+  name: yolo11
+  weights: weights/eval/yolo11_best.pt
+tracker:
+  type: botsort
+  config: configs/botsort.yaml
+device: '0'
+scenarios:
+  group: dev
+  index: data/occlusion_test_scenarios/v2/dev/index.json
+  config_sha256: 1c02e6dd77afbdea3e8f76c5e6087a42989e14bfd64e42f18b154edb3c1ea396
+  seed: 20261113
+  count: 336
+  partial: false
+  limit_scenarios: null
+  config_version: 2
+  screening_sha256: 273278cedc02fe2540c90dbc404c24ac5b148fdcb4791a42ea0b5425c8b70daa
+  target_lock:
+    match_iou: 0.5
+    max_search_frames: 10
+    lock_confirm_frames: 3
+    lock_iou: 0.5
+    required_detectors:
+    - yolo11
+    - yolo26

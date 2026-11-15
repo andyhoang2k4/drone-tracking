@@ -1,0 +1,89 @@
+# Quy tac tune Motion Memory tren nhom DEV - DANG KY TRUOC khi co ket qua that
+# (CLAUDE.md muc 13). Viet ngay 2026-11-14, truoc khi xem bat ky so lieu nao cua
+# ablation dev v2_001. KHONG sua file nay sau khi da chay tuning; doi quy tac ->
+# tang `version` + tag/thu muc moi (version cu giu lai de truy vet).
+#
+# Thuc thi: src/motion_memory_tuning.py (ham thuan, co test) +
+# scripts/tune_motion_memory.py (chay replay tren log tracker v2_001).
+# sha256 cua file nay (bo ky tu CR) duoc ghi vao config.yaml/summary.json cua
+# moi lan tuning va config.yaml cua moi experiment tune.
+#
+# --- Pham vi ---
+#   - Chi nhom dev (VisDrone val), kich ban v2 (configs/occlusion_scenarios_v2.yaml),
+#     metrics v2 (configs/occlusion_metrics_v2.yaml): chi kich ban da khoa truoc khi che.
+#   - Dau vao tracker: log YOLO + BoT-SORT cua ablation v2_001
+#     (experiments/<det>_botsort_tracks_occl_dev_v2_001); KHONG chay lai YOLO.
+#   - MOT cau hinh Motion Memory chung cho ca hai detector, danh gia rieng tung detector.
+#   - Heldout KHONG duoc dung o bat ky buoc nao cua tuning.
+#
+# --- Cau hinh mac dinh (*) ---
+#   Lay tu configs/motion_memory.yaml (khong sua file do). `expected_defaults`
+#   ghi gia tri tai thoi diem dang ky; file mac dinh doi -> script tu choi.
+#   Cau hinh `default` duoc CHAY LAI cung code voi cac cau hinh khac (doi chieu
+#   voi <det>_botsort_mm_occl_dev_v2_001 de kiem tra tai lap).
+#
+# --- Luoi (quet TUNG tham so, tham so khac giu mac dinh) ---
+#   Ten khoa la ten THAT trong MotionMemoryConfig / configs/motion_memory.yaml.
+#   De bai dung ten rut gon: lost_frames = lost_timeout_frames,
+#   reid_frames = reid_timeout_frames (cung y nghia, khong doi).
+#   Vong 1: `default` + 7 cau hinh khac mac dinh (2 + 2 + 2 + 1), moi cau hinh
+#   doi dung MOT tham so.
+#   Vong 2: DUNG MOT cau hinh ket hop gia tri thang cua tung tham so o vong 1
+#   (tham so khong co gia tri thang giu mac dinh). Neu cau hinh ket hop trung
+#   mot cau hinh da chay (khong tham so nao thang -> trung `default`; dung mot
+#   tham so thang -> trung cau hinh vong 1 do) thi KHONG chay lai, dung ket qua
+#   da co. Khong co vong 3; khong bo sung luoi sau khi co ket qua.
+#
+# --- Diem, hop le, chon ---
+#   Diem(cfg) = correct_prediction_ratio GOP tren frame bi che: tong
+#     correct_occluded_frames / tong occlusion_frames, cong ca hai detector
+#     (khong trung binh ti le).
+#   Hop le(cfg) <=> tren MOI detector rieng:
+#     reidentification_rate(cfg) >= reidentification_rate(default) VA
+#     correct_prediction_ratio(cfg) > correct_prediction_ratio(default).
+#   Gia tri thang cua tham so (vong 1): cau hinh hop le cua tham so do co diem
+#     cao nhat; hoa -> mean_position_error_px gop (trong so = frame bi che co
+#     output, ca hai detector) thap hon; van hoa -> giu mac dinh.
+#   Cau hinh cuoi: trong {cau hinh thang vong 1 (moi cau hinh don), cau hinh
+#     vong 2} chi xet cau hinh hop le VA Diem(cfg) - Diem(default) >=
+#     min_improvement; lay diem cao nhat (hoa nhu tren). Khong co cau hinh nao
+#     -> KET LUAN = giu cau hinh mac dinh (ket qua hop le, ghi ro, khong giau).
+#   Chi khi chon duoc cau hinh: ghi configs/motion_memory_tuned.yaml (file moi);
+#   KHONG ghi de configs/motion_memory.yaml.
+#
+# --- Ket qua ---
+#   Moi cau hinh (ke ca cau hinh xau) deu luu day du:
+#   experiments/<det>_botsort_mm_occl_dev_tune_<id>/ (metrics.json gop + so sanh)
+#   va experiments/motion_memory_tuning_dev/summary.json.
+#   Chay voi --limit-scenarios -> partial, KHONG duoc dung de chon cau hinh.
+
+version: 1
+name: motion_memory_tuning_dev
+group: dev
+detectors: [yolo11, yolo26]
+
+scenario_config: configs/occlusion_scenarios_v2.yaml
+metrics_config: configs/occlusion_metrics_v2.yaml
+metrics_config_version: 2
+base_motion_memory_config: configs/motion_memory.yaml
+source_tag: v2_001          # log tracker + baseline cua ablation dev v2
+
+grid:                        # thu tu tham so/gia tri co dinh (ID cau hinh theo thu tu nay)
+  velocity_decay: [0.90, 0.95, 0.98]
+  lost_timeout_frames: [10, 15, 25]
+  match_iou: [0.2, 0.3, 0.4]
+  reid_timeout_frames: [45, 75]
+
+expected_defaults:           # = configs/motion_memory.yaml luc dang ky
+  velocity_decay: 0.95
+  lost_timeout_frames: 15
+  match_iou: 0.3
+  reid_timeout_frames: 45
+
+selection:
+  score: pooled_correct_prediction_ratio
+  validity: per_detector_reid_rate_not_worse_and_cpr_better
+  tie_break: [pooled_mean_position_error_px, keep_default]
+  min_improvement: 0.01      # 1 diem phan tram tren diem gop
+
+max_rounds: 2

@@ -1,0 +1,128 @@
+# KE HOACH BAO CAO HELDOUT - KHAI BAO TRUOC (CLAUDE.md muc 13, 14). Viet 2026-11-15,
+# TRUOC khi chay screening / ablation heldout. Commit file nay TRUOC khi chay screening
+# heldout. KHONG sua sau khi da chay; doi -> tang `version` + tag moi, ghi ro la lan chay moi.
+#
+# Thuc thi:
+#   scripts/run_occlusion_ablation.py --group heldout --report-plan configs/heldout_report_plan.yaml ...
+#     (guard: sha256 moi file trong plan, weights, cay lam viec sach, tu choi neu da co metrics)
+#   scripts/report_heldout.py --plan configs/heldout_report_plan.yaml
+#     (src/occlusion_report.py: bang mo ta, gop detector, bootstrap; scripts/diagnose_mm_hijack.py)
+# sha256 file nay (bo ky tu CR) ghi vao config.yaml cua moi experiment heldout va report.json.
+# Moi sha256 trong file nay tinh tren noi dung da bo ky tu CR.
+#
+# --- Quy tac (bat buoc) ---
+#  1. Heldout (VisDrone test-dev) chay DUNG MOT LAN, MOT lenh duy nhat cho moi cot, cung log
+#     tracker (YOLO + BoT-SORT chay mot lan moi detector x kich ban; moi cot MM la replay CPU).
+#     Khong tune lai, khong chon lai cau hinh sau khi thay ket qua heldout.
+#  2. Cot quyet dinh (mm_anchor) dung DUNG ba dieu kien (i)-(iii) cua
+#     configs/motion_memory_anchor_dev.yaml (sha256 o `decision.rules_from`), tinh tren heldout,
+#     TUNG detector rieng; bao "DAT" / "KHONG DAT" ke ca khi khong dat.
+#  3. Cac cot mo ta (mm_tuned, mm_anchor_lost25, box_precision, phan loai frame, bootstrap) KHONG
+#     dung de chon cau hinh sau khi thay ket qua.
+#  4. Bao cao DU moi cot da khai bao (thieu cot -> bao cao ghi ro thieu, khong bo cot).
+#  5. Motion Memory hien la "motion-only + ID anchor": KHONG co appearance Re-ID. Re-ID o d60 bi
+#     gioi han boi track_buffer=30 cua BoT-SORT (configs/botsort.yaml) va thiet ke motion-only.
+#  6. Selection bias: chi muc tieu ma CA HAI detector khoa duoc truoc khi che (screening); khong
+#     suy rong cho muc tieu kho.
+#  7. Bao ca chieu xau: re-ID giam, box_precision thap, box cua track khac (tracking_other_id).
+#  8. Bao phan loai frame bi che co box theo state/ID (lost_extrapolated, tracking_original_id,
+#     tracking_other_id) cho cac cot MM bang scripts/diagnose_mm_hijack.py.
+#  9. Chi duoc goi ket qua la "benchmark" heldout neu dung dung split (test-dev), kich ban v2,
+#     metrics v2 va ke hoach nay (dung sha256).
+# 10. Giu lai moi lan chay ke ca loi/partial; khong xoa.
+# 11. Resume: chi khi CHUA co metrics.json gop o bat ky cot nao, bang co --resume-incomplete
+#     (ghi vao config.yaml, khoa heldout_resumes). Da co metrics gop -> tu choi; chay lai phai
+#     dung tag moi + --heldout-rerun-note (ghi vao config.yaml).
+# 12. --limit-scenarios / --allow-partial-index KHONG dung cho heldout.
+# 13. Bootstrap: MO TA do bat dinh, KHONG phai kiem dinh y nghia thong ke.
+#
+# --- Tai lap (muc 14) ---
+#  - Cay lam viec phai SACH theo dinh nghia src/utils/run_context.py CLEAN_TREE_DEFINITION:
+#    khong file da track nao bi sua/staged/xoa so voi HEAD, moi file plan tham chieu da track;
+#    file untracked/ignored (output, du lieu) khong tinh. Commit git ghi vao config.yaml.
+#  - Moi truong (Python, platform, CUDA, GPU, version package) ghi vao config.yaml cua experiment
+#    log tracker (may chay src.track). Replay (run_pipeline --replay-tracks) cho moi cot MM chi
+#    dung CPU. Seed: kich ban (index.json), bootstrap (duoi day).
+#  - Weights: sha256 moi detector phai TRUNG weights da dung khi screening dev VA screening heldout
+#    (index.json `screening.detectors`), sha thuc te ghi vao config.yaml/report. (Index/screening
+#    dev chua co trong repo luc viet ke hoach nen khong ghi gia tri sha o day.)
+
+version: 1
+name: heldout_report_plan
+group: heldout
+tag: v2_001                 # experiments/<det>_botsort[_mm[_<extra>]]_occl_heldout_v2_001
+detectors: [yolo11, yolo26]
+
+scenario_config:
+  path: configs/occlusion_scenarios_v2.yaml
+  sha256: 1c02e6dd77afbdea3e8f76c5e6087a42989e14bfd64e42f18b154edb3c1ea396
+metrics_config:
+  path: configs/occlusion_metrics_v2.yaml
+  sha256: c221ba7abcba9f1539147214de294b8b487753de48ddd766da7dcd728e459a5a
+weights:
+  must_match_screening_of: [dev, heldout]
+
+columns:                    # thu tu co dinh; no_mm = baseline, mm_default = --motion-memory-config
+  - name: no_mm
+    kind: baseline
+    role: reference
+  - name: mm_default
+    kind: motion_memory
+    config: configs/motion_memory.yaml
+    sha256: 6d74d1eef38343e1ab1ce6c36ec8539695edf113e0f9d6c4357e19e4e3b36af8
+    role: reference
+  - name: mm_tuned
+    kind: extra             # --extra-motion-memory-config tuned=<config>
+    extra_name: tuned
+    config: configs/motion_memory_tuned.yaml
+    sha256: 80cd5182f4f66a69d24c91a091c89703e7407cbe472db02dc9bd0a8461eceb8a
+    role: descriptive
+  - name: mm_anchor
+    kind: extra
+    extra_name: anchor
+    config: experiments/motion_memory_anchor_dev/mm_configs/anchor.yaml
+    sha256: b83917d9a5b95c6aa8e7b65b3f019d30199aeb2e8f84c1c5ad859bf036ec5fa3
+    role: decision
+  - name: mm_anchor_lost25
+    kind: extra
+    extra_name: anchor_lost25
+    config: experiments/motion_memory_anchor_dev/mm_configs/anchor_lost25.yaml
+    sha256: 4537f52717d6ba91df1c48b2493d54c893ff0bff23b34402a82f2668fa389346
+    role: descriptive
+
+decision:
+  column: mm_anchor
+  rules_from:
+    path: configs/motion_memory_anchor_dev.yaml
+    sha256: 8baf5b9d19eb31dae9cbdbc62fc7904b1c39d2021b46c2cb2e56e731c0a6291c
+  reference_columns:        # ten tham chieu trong rules_from -> cot heldout
+    no_mm: no_mm
+    mm_default: mm_default
+
+dev_evidence:               # ket qua dev da co khi viet ke hoach (chi truy vet)
+  - path: experiments/motion_memory_anchor_dev/summary.json
+    sha256: 3481a033b28aba6e15dd74ef530766790aa7a1338ad28e7904a1b73628b7f6b5
+  - path: experiments/motion_memory_anchor_dev/diagnose_hijack.json
+    sha256: a44e1c8f6408b4ece00510686f59dbae0d15bc1b5146a9c8f9ab6cd86162eeaf
+
+report:
+  metrics:                  # bat buoc, moi cot x detector x (overall + moi duration) + gop detector
+    - correct_prediction_ratio
+    - box_precision
+    - occluded_frames_with_output
+    - mean_position_error_px          # ghi chu: moi cot do tren tap frame CO BOX cua chinh no
+    - reidentification_rate
+    - reidentified_with_new_track_id  # ghi chu: no_mm = 0 do dinh nghia (ID co dinh)
+    - mean_time_to_reidentify_frames  # ghi chu: trung binh CO DIEU KIEN tren kich ban re-ID duoc
+    - longest_tracking_gap_max
+    - longest_tracking_gap_mean
+  counts: [scenarios_total, scenarios_not_locked, independent_targets, independent_sequences, per_sequence]
+  diagnosis_columns: [mm_default, mm_tuned, mm_anchor, mm_anchor_lost25]
+
+bootstrap:
+  cluster: sequence
+  resamples: 2000
+  seed: 20261115
+  ci: 0.95
+  paired_vs: [no_mm, mm_default]
+  metrics: [correct_prediction_ratio, box_precision, reidentification_rate]
