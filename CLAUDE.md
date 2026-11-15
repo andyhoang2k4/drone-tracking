@@ -40,6 +40,13 @@ Nếu một task có vẻ dẫn tới các việc ở nhóm "không cần" phía
 2. **Sau bước 5** (Motion Memory chạy được): thay heuristic ngoại suy tạm trong `src/sim/target_manager.py` bằng `MotionMemory`, rồi chạy PX4 SITL + Gazebo để kiểm tra vòng kín: bám mục tiêu, bay tìm đúng hướng khi bị che khuất, bắt lại khi mục tiêu xuất hiện lại, độ mượt của lệnh bay.
 3. **Trước khi lên phần cứng thật:** dùng sim để chỉnh tham số bám (khoảng cách, tốc độ yaw, timeout) và thử các tình huống nguy hiểm.
 
+**Cập nhật (quyết định 2026-11-15): dựng PX4 SITL + Gazebo sớm để probe domain-gap.** Cho phép cài PX4-Autopilot + Gazebo Harmonic trên cloud (ngoài repo, ~/PX4-Autopilot) và dựng world thử (file trong scripts/sim_probe/, ảnh và log xuất ra ngoài repo) trước mốc 2 ở trên (mốc sau bước 5). Mục đích chỉ là kiểm tra detector huấn luyện trên VisDrone có nhận ra người/xe trong ảnh Gazebo hay không, trước khi đầu tư vào hình ảnh mô phỏng. Phạm vi:
+1. Probe domain-gap: render headless (ogre2, EGL), chạy YOLO11-seg và YOLO26-seg lên khung hình, xem ảnh có chú thích.
+2. Nguồn "oracle detection" từ boundingbox_camera của Gazebo, đưa vào lớp sim qua cùng interface nguồn dữ liệu như đầu ra pipeline (nguồn thay thế, không sửa detect/track/motion memory), để sim không phụ thuộc vào detector.
+3. Chỉ làm nếu probe cho thấy detector nhận được một phần: chỉnh asset và hình học (độ cao, góc nhìn, tỉ lệ pixel).
+4. Fine-tune detector riêng cho sim: chỉ làm khi người dùng cho phép rõ ràng.
+Mốc 2 ở trên (sau bước 5: thay heuristic bằng MotionMemory, kiểm tra vòng kín) không đổi. Các ràng buộc của "Ngoại lệ: lớp mô phỏng bay" vẫn giữ nguyên, và probe không được dùng để đánh giá motion memory.
+
 Số liệu đánh giá (mục 12) vẫn đo trên video có ground truth qua `src/evaluate.py`, không đo trên sim.
 
 ## 3. Môi trường phát triển
@@ -160,7 +167,8 @@ drone-tracking/
 │   ├── train_yolo11.sh
 │   ├── train_yolo26.sh
 │   ├── run_pipeline.py
-│   └── run_sim.py                 (chạy mô phỏng bay)
+│   ├── run_sim.py                 (chạy mô phỏng bay)
+│   └── sim_probe/                 (probe domain-gap Gazebo, xem mục 2)
 └── notebooks/
 ```
 
@@ -186,6 +194,7 @@ drone-tracking/
 - Không tự ý thay thế model, tracker, hay thuật toán đã chỉ định trong file này bằng lựa chọn khác để code chạy được (ví dụ BoT-SORT lỗi → tự đổi sang DeepSORT cho xong việc, hoặc YOLO26-seg không nhận → tự đổi sang YOLO11-seg). Khi gặp trường hợp này, dừng lại, báo rõ lỗi gặp phải, và chờ xác nhận trước khi đổi — không tự quyết rồi giải thích sau.
 - Sau khi sửa code: (1) chạy kiểm tra cú pháp/import, (2) chạy test liên quan nếu có, (3) báo rõ đã thay đổi gì và phần nào chưa được test.
 - Không bịa kết quả benchmark/thực nghiệm. Khi báo cáo kết quả code hay experiment, phân biệt rõ mức đã kiểm chứng: syntax/import check, unit test, hay benchmark GPU thực tế — không gộp chung thành "đã pass"/"thành công" nếu chưa chạy đủ bước. Nếu chưa có experiment thực tế cho một so sánh (ví dụ YOLO11 vs YOLO26), nói rõ là chưa có số liệu thay vì tự ước tính rồi trình bày như dữ liệu đã đo.
+- Mọi thay đổi file trong repo (code, config, docs, kể cả trong src/sim/, kể cả tạo file mới hay xóa file): đọc, phân tích và báo cáo đề xuất trước, chờ người dùng duyệt rõ ràng rồi mới sửa. Không tự bắt tay vào làm khi chưa được duyệt. Lệnh chỉ đọc thì chạy tự do.
 
 **Xử lý code tham khảo từ repo bên ngoài:** khi được yêu cầu xem một repo/dự án khác để tham khảo cách làm (ví dụ cách xử lý occlusion, cách setup PX4 SITL), đọc để hiểu ý tưởng/thiết kế — không copy-paste nguyên file hoặc khối code lớn vào project. Viết lại logic theo interface và convention đã định trong file này (ví dụ Motion Memory contract ở mục 6), không giữ nguyên cấu trúc code của tác giả gốc. Thư viện chính thức có version rõ ràng (`ultralytics`, `mavsdk`, PX4-Autopilot) là dependency, cài qua package manager như bình thường — khác với các dự án mẫu cá nhân trên GitHub (thường không có license rõ ràng), chỉ dùng để đọc và học ý tưởng.
 

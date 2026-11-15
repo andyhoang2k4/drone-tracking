@@ -17,3 +17,9 @@ target:
 gimbal:
   enabled: true
   default_pitch_deg: -15.0
+
+# Oracle detection (src/sim/oracle.py): box ground truth tu boundingbox_camera thay cho YOLO + BoT-SORT.
+# Chi de lop sim chay khong phu thuoc detector; khong dung de danh gia (CLAUDE.md muc 2, 12).
+oracle:
+  bbox_topic: "/camera/bboxes"   # topic cua sensor boundingbox_camera trong world
+  label_classes: {}              # vi du {1: car, 2: pedestrian}; label lay tu plugin Label cua tung model
