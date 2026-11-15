@@ -93,6 +93,13 @@ def test_follow_signs():
     assert centred.yaw_rate == 0.0
 
 
+def test_follow_does_not_advance_when_box_cut_at_bottom_edge():
+    cfg = FollowConfig()
+    free = follow_command((300, 300, 330, 340), F, 100, cfg)  # nho, khong cham mep -> tien
+    cut = follow_command((300, 440, 330, 480), F, 100, cfg)  # cung kich thuoc nhung cham mep duoi (F cao 480)
+    assert free.forward > 0 and cut.forward == 0.0
+
+
 def test_follow_slows_forward_when_target_far_off_axis():
     cfg = FollowConfig()
     on = follow_command((300, 220, 340, 260), F, 100, cfg)

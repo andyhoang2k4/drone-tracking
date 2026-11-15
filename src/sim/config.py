@@ -56,6 +56,9 @@ class FollowConfig:
     max_yaw_rate_deg: float = 60.0
     yaw_deadband_deg: float = 1.5
     slow_when_yaw_err_deg: float = 35.0  # sai so yaw lon thi giam toc do tien
+    # bbox cham mep duoi anh (trong ti le nay cua chieu cao anh) -> bi cat, kich thuoc khong dang tin: khong tien them.
+    # Thieu chan nay, muc tieu di sat mep duoi trong "nho" nhu o xa va drone lao toi (thay trong sim 2026-11-15).
+    bottom_edge_frac: float = 0.02
 
 
 @dataclass

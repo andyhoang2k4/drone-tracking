@@ -42,6 +42,8 @@ def follow_command(
     h_frac = h / frame.height
     size_err = (cfg.desired_height_frac - h_frac) / cfg.desired_height_frac
     fwd = clamp(cfg.k_fwd * size_err, -cfg.max_back_ms, cfg.max_fwd_ms)
+    if bbox[3] >= frame.height * (1.0 - cfg.bottom_edge_frac):  # box bi cat o mep duoi -> khong tien
+        fwd = min(fwd, 0.0)
     if fwd > 0:  # chua huong dung thi chua lao toi
         fwd *= clamp(1.0 - abs(err_deg) / cfg.slow_when_yaw_err_deg, 0.0, 1.0)
     return BodyVelocity(forward=fwd, yaw_rate=yaw_rate)
