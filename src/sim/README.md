@@ -90,8 +90,14 @@ Cập nhật thêm (2026-11-15, phiên probe):
 - Render bằng CPU (Mesa llvmpipe qua EGL) không chạy được: ogre2 báo "OpenGL 3.3 is not supported" rồi segfault. Cần GPU.
 - `boundingbox_camera` với `<box_type>2d</box_type>` + `<save>` ghi `boxes/boxes_*.csv` (`label,x_center,y_center,width,height`) theo plugin Label.
 
-Chưa kiểm: `make px4_sitl gz_x500_gimbal` (mới build, chưa chạy kèm Gazebo); `GzCameraSource` với Gazebo thật; YOLO11-seg/YOLO26-seg trên ảnh
-Gazebo (probe domain-gap, CLAUDE.md §2: đã render khung + GT bbox ngoài repo, chưa chạy detector). Probe không phải benchmark.
+- Probe domain-gap (CLAUDE.md §2 mục 1) đã chạy. YOLO11-seg/YOLO26-seg (train VisDrone) nhận ra phần lớn người/xe Fuel trên 8 khung
+  tĩnh (12 m, cúi 45°), không có detection trên nền; chi tiết và giới hạn ở `~/sim_probe/REPORT.md` (ngoài repo, không phải benchmark).
+  Asset "Male visitor" là `<actor>`, include làm model tĩnh thì render nằm ra, nên tránh dùng.
+- `GzOracleDetectionSource` (`oracle.py`) đã chạy với Gazebo thật trên world probe: nhận đủ 14 vật thể, box trùng với CSV do
+  `<save>` của boundingbox_camera ghi ra.
+
+Chưa kiểm: `make px4_sitl gz_x500_gimbal` (mới build, chưa chạy kèm Gazebo); `GzCameraSource` với Gazebo thật; oracle trong vòng lặp
+`SimApp` (chưa nối vào `scripts/run_sim.py`).
 
 File probe: scripts/sim_probe/ (smoke_world.sdf, check_pixels.py). Chạy từ thư mục ngoài repo: ảnh ghi vào frames_smoke/ theo thư mục đang chạy gz sim.
 
@@ -106,6 +112,7 @@ File probe: scripts/sim_probe/ (smoke_world.sdf, check_pixels.py). Chạy từ t
 | `supervisor.py` | Chuyển mode, nhịp arm, thông báo, ghép lệnh |
 | `link.py` | `PymavlinkLink` (PX4 thật/SITL) |
 | `sources.py`, `adapters.py` | Camera Gazebo/video, YOLO + BoT-SORT theo từng frame (cùng quy ước track dict với `src/track.py`, dùng `configs/botsort.yaml`) |
+| `oracle.py` | Oracle detection từ `boundingbox_camera` của Gazebo, cùng interface `DetectionSource` (track_id = label, conf = 1.0; không dùng để đánh giá) |
 | `demo.py` | Thế giới giả lập để chạy thử |
 | `app.py` | Vòng lặp chính |
 

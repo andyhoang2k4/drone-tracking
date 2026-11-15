@@ -73,6 +73,16 @@ class GimbalConfig:
 
 
 @dataclass
+class OracleConfig:
+    """Nguon oracle detection tu boundingbox_camera cua Gazebo (src/sim/oracle.py). Khong dung de danh gia."""
+
+    bbox_topic: str = "/camera/bboxes"  # topic cua sensor boundingbox_camera (box_type 2d); kiem tra bang `gz topic -l`
+    label_classes: dict[int, str] = field(default_factory=dict)  # label (plugin Label) -> ten lop; thieu thi "label<n>"
+    min_box_px: float = 0.0
+    max_age_s: float = 1.0
+
+
+@dataclass
 class SimConfig:
     loop_hz: float = 30.0
     link: LinkConfig = field(default_factory=LinkConfig)
@@ -82,6 +92,7 @@ class SimConfig:
     follow: FollowConfig = field(default_factory=FollowConfig)
     search: SearchConfig = field(default_factory=SearchConfig)
     gimbal: GimbalConfig = field(default_factory=GimbalConfig)
+    oracle: OracleConfig = field(default_factory=OracleConfig)
     auto_engage_on_lock: bool = True  # cong tac dang o Auto, vua khoa muc tieu -> vao Auto luon
 
 
