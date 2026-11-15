@@ -236,6 +236,42 @@ python -m src.evaluate --split val --sequence $SEQ \
 bash scripts/train_yolo11.sh yolo11_baseline_001
 ```
 
+## Chay AI tracking tren video/camera (muc 1)
+
+Dung pipeline da co (YOLO-seg -> BoT-SORT -> Motion Memory ban anchor da qua heldout) tren
+video, thu muc anh hoac camera, may co GPU. Pipeline bam MOT muc tieu, chon bang track ID.
+
+```bash
+# 1. Xem cac track ID: chay tracker roi ve moi track + ID len video de chon muc tieu
+python -m src.track --weights weights/eval/yolo11_best.pt --source <video.mp4> \
+    --device 0 --output <out>/tracks.jsonl
+python scripts/render_overlay.py --video <video.mp4> --tracks <out>/tracks.jsonl \
+    --out <out>/tracks_overlay.mp4
+
+# 2. Pipeline day du voi Motion Memory (anchor), muc tieu = track ID da chon
+python scripts/run_pipeline.py --weights weights/eval/yolo11_best.pt --source <video.mp4> \
+    --device 0 --motion-memory \
+    --motion-memory-config experiments/motion_memory_anchor_dev/mm_configs/anchor.yaml \
+    --target-track-id <ID> --experiment-id <ten> [--output-root <out>]
+
+# 3. Xem ket qua: khung muc tieu to mau theo state (TRACKING xanh la, LOST vang cam,
+#    REIDENTIFYING xanh duong, FAILED do) + moi track xam
+python scripts/render_overlay.py --video <video.mp4> --tracks <out>/tracks.jsonl \
+    --pipeline <out>/<ten>/logs/pipeline.jsonl --out <out>/overlay.mp4
+```
+
+YOLO26: `--weights weights/eval/yolo26_best.pt`. Khong co `--output-root` -> ghi vao
+`experiments/<ten>/`. Moi frame cua `logs/pipeline.jsonl`: `track_id`, `predicted_bbox`
+([x1,y1,x2,y2]), `state`, `motion_confidence`, `frames_since_confirmed` (+ `detected`,
+`tracker_bbox`, `detector_confidence` cua detection; hai confidence KHONG gop).
+
+Gioi han hien tai: phai biet truoc track ID; `FAILED` la trang thai cuoi (muc tieu quay lai
+khong tu bat lai, phai chon lai); re-ID chi dua tren chuyen dong + ID anchor (che lau ~60 frame
+gan nhu khong bat lai - xem `experiments/heldout_report_v2_001/README.md`); detector train tren
+VisDrone, camera/boi canh khac chua do. Kiem tra 2026-11-15 (chay thu, khong phai benchmark):
+video 4K 978 frame, ca hai detector chay het; tracker YOLO11 ~31.9 ms/frame tren RTX 5060 Ti
+(phan lon la giai ma video 4K + BoT-SORT, YOLO ~7 ms).
+
 ## Test
 
 ```bash
